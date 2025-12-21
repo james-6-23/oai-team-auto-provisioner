@@ -136,7 +136,7 @@ def get_verification_code(email: str, max_retries: int = None, interval: int = N
                     if match:
                         code = match.group(1)
                         if progress_shown:
-                            print()  # 清除进度行
+                        log.progress_clear()
                         log.success(f"验证码获取成功: {code}")
                         return code, None, email_time_str
 
@@ -145,7 +145,7 @@ def get_verification_code(email: str, max_retries: int = None, interval: int = N
                     if match:
                         code = match.group(1)
                         if progress_shown:
-                            print()  # 清除进度行
+                        log.progress_clear()
                         log.success(f"验证码获取成功: {code}")
                         return code, None, email_time_str
 
@@ -154,24 +154,24 @@ def get_verification_code(email: str, max_retries: int = None, interval: int = N
                     if match:
                         code = match.group(1)
                         if progress_shown:
-                            print()  # 清除进度行
+                        log.progress_clear()
                         log.success(f"验证码获取成功: {code}")
                         return code, None, email_time_str
 
         except Exception as e:
             if progress_shown:
-                print()
+                log.progress_clear()
                 progress_shown = False
             log.warning(f"获取邮件异常: {e}")
 
         if i < max_retries - 1:
             elapsed = (i + 1) * interval
-            print(f"\r  [等待中... {elapsed}s]", end='', flush=True)
+            log.progress(f"\r  [等待中... {elapsed}s]", end='', flush=True)
             progress_shown = True
             time.sleep(interval)
 
     if progress_shown:
-        print()  # 换行
+        log.progress_clear()
     log.error("验证码获取失败 (超时)")
     return None, "未能获取验证码", None
 
