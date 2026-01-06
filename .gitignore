@@ -5,6 +5,7 @@ build/
 dist/
 wheels/
 *.egg-info
+*.spec
 
 # Virtual environments
 .venv
@@ -14,6 +15,7 @@ config.toml
 
 # Data files with sensitive information
 accounts.csv
+created_credentials.csv
 team.json
 team_tracker.json
 
