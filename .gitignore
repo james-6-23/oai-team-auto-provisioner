@@ -27,6 +27,7 @@ team_tracker.json
 
 # Serena/工具缓存（本地生成，不应提交）
 .serena/
+.claude/
 
 # OS
 .DS_Store
