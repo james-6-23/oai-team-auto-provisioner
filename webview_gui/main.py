@@ -448,23 +448,31 @@ class WebviewApi:
 
     def _print_status_for_work_dir(self) -> None:
         """读取工作目录下的追踪文件并打印状态（避免 onefile 下落到 _MEIPASS）。"""
+        import logger as logger_module
+
+        log = logger_module.log
+        try:
+            log.use_color = False
+        except Exception:
+            pass
+
         tracker_path = self._get_tracker_path()
-        print("[GUI] 当前状态")
-        print(f"[GUI] tracker: {tracker_path}")
+        log.header("当前状态（GUI）")
+        log.info(f"tracker: {tracker_path}", icon="time")
 
         if not tracker_path.exists():
-            print("[GUI] 没有任何记录（未找到 team_tracker.json）")
+            log.info("没有任何记录（未找到 team_tracker.json）")
             return
 
         try:
             tracker = json.loads(tracker_path.read_text(encoding="utf-8"))
         except Exception as e:
-            print(f"[GUI] 读取追踪文件失败: {e}")
+            log.error(f"读取追踪文件失败: {e}")
             return
 
         teams = tracker.get("teams", {}) if isinstance(tracker, dict) else {}
         if not teams:
-            print("[GUI] 没有任何记录")
+            log.info("没有任何记录")
             return
 
         total_accounts = 0
@@ -474,7 +482,7 @@ class WebviewApi:
         for team_name, accounts in teams.items():
             if not isinstance(accounts, list):
                 continue
-            print(f"\n[TEAM] {team_name}")
+            log.info(f"{team_name}:", icon="team")
             status_count: dict[str, int] = {}
 
             for acc in accounts:
@@ -487,22 +495,22 @@ class WebviewApi:
                 email = acc.get("email", "")
                 if status == "crs_added":
                     total_completed += 1
-                    print(f"[OK] {email} ({status})")
+                    log.success(f"{email} ({status})")
                 elif status in ["invited", "registered", "authorized", "processing"]:
                     total_incomplete += 1
-                    print(f"[WARN] {email} ({status})")
+                    log.warning(f"{email} ({status})")
                 else:
                     total_incomplete += 1
-                    print(f"[ERR] {email} ({status})")
+                    log.error(f"{email} ({status})")
 
-            print(f"[TEAM] 统计: {status_count}")
+            log.info(f"统计: {status_count}")
 
-        print("\n" + "-" * 40)
-        print(f"[SUM] 总计: {total_accounts} 个账号")
-        print(f"[SUM] 完成: {total_completed}")
-        print(f"[SUM] 未完成: {total_incomplete}")
+        log.separator("-", 40)
+        log.info(f"总计: {total_accounts} 个账号")
+        log.success(f"完成: {total_completed}")
+        log.warning(f"未完成: {total_incomplete}")
         last_updated = tracker.get("last_updated", "N/A") if isinstance(tracker, dict) else "N/A"
-        print(f"[SUM] 最后更新: {last_updated}")
+        log.info(f"最后更新: {last_updated}", icon="time")
 
     def _is_running_locked(self) -> bool:
         return bool(self._thread is not None and self._thread.is_alive())
@@ -594,7 +602,7 @@ def main() -> None:
             min_size=(1000, 650),
             text_select=True,
             zoomable=True,
-            background_color="#0b1020",
+            background_color="#0f172a",
         )
         webview.start()
     except Exception as e:

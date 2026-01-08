@@ -1,5 +1,5 @@
 :root {
-  --bg: #0b1020;
+  --bg: #0f172a;
   --panel: rgba(255, 255, 255, 0.06);
   --panel-2: rgba(255, 255, 255, 0.08);
   --text: rgba(255, 255, 255, 0.92);
@@ -11,7 +11,8 @@
   --ok: #00d084;
   --warn: #ffb020;
   --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-    "Liberation Mono", "Courier New", monospace;
+    "Liberation Mono", "Courier New", monospace, "Segoe UI Emoji",
+    "Apple Color Emoji", "Noto Color Emoji";
 }
 
 * {
@@ -26,8 +27,13 @@ body {
 body {
   margin: 0;
   color: var(--text);
-  background: radial-gradient(1200px 800px at 20% 0%, #14204b 0%, #0b1020 55%)
-    fixed;
+  background: radial-gradient(
+      1100px 760px at 18% 0%,
+      rgba(110, 168, 254, 0.22) 0%,
+      rgba(110, 168, 254, 0) 55%
+    ),
+    radial-gradient(900px 620px at 88% 18%, rgba(0, 208, 132, 0.12) 0%, rgba(0, 208, 132, 0) 60%),
+    linear-gradient(180deg, #0b1220 0%, var(--bg) 60%, #070b14 100%) fixed;
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto,
     Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
 }
