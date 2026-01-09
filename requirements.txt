@@ -1,0 +1,5 @@
+drissionpage>=4.1.1.2
+requests>=2.32.5
+setuptools>=80.9.0
+tomli>=2.3.0
+pywebview>=6.1

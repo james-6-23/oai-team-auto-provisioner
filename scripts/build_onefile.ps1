@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 
 # Run from repo root:
-#   powershell -ExecutionPolicy Bypass -File .\\tk_gui\\build_onefile.ps1
+#   powershell -ExecutionPolicy Bypass -File .\\scripts\\build_onefile.ps1
 
 $repo = Resolve-Path (Join-Path $PSScriptRoot "..")
 Set-Location $repo
@@ -22,15 +22,20 @@ if ($LASTEXITCODE -ne 0) {
 & $py -m pip install -U pyinstaller
 if ($LASTEXITCODE -ne 0) { throw "Failed to install PyInstaller" }
 
-# Ensure pywebview is available in the packaging environment
-& $py -m pip install -U pywebview
-if ($LASTEXITCODE -ne 0) { throw "Failed to install pywebview" }
+$req = Join-Path $repo "requirements.txt"
+if (-not (Test-Path $req)) {
+  throw "requirements.txt not found. Please run from repo root."
+}
+
+# Install runtime dependencies for packaging
+& $py -m pip install -U -r $req
+if ($LASTEXITCODE -ne 0) { throw "Failed to install runtime dependencies (requirements.txt)" }
 
 & $py -m PyInstaller --noconfirm --clean --onefile --noconsole --name oai-team-gui `
   --specpath "build" `
-  --add-data "..\\config.toml.example;." `
-  --add-data "..\\team.json.example;." `
-  --add-data "..\\webview_gui\\assets;webview_gui\\assets" `
+  --add-data "$(Join-Path $repo "config.toml.example");." `
+  --add-data "$(Join-Path $repo "team.json.example");." `
+  --add-data "$(Join-Path $repo "webview_gui\\assets");webview_gui\\assets" `
   "gui_main.py"
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed" }
 
