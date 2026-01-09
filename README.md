@@ -143,14 +143,13 @@ uv sync
 python -m webview_gui
 
 # 打包为单文件 EXE（Windows）
-powershell -ExecutionPolicy Bypass -File .\\tk_gui\\build_onefile.ps1
+powershell -ExecutionPolicy Bypass -File .\\scripts\\build_onefile.ps1
 ```
 
 - 打包产物：`dist/oai-team-gui.exe`
 - EXE 运行时：首次启动后在 GUI「配置编辑」页保存配置（配置存于程序内部存储，无需外置 `config.toml` / `team.json`）
 - 新增模式：GUI「运行」页提供“批量注册 OpenAI（仅注册）”，支持邮箱来源选择（域名邮箱/随机邮箱）
 - 输出记录：账号/凭据/追踪都写入程序内部存储；需要文件时在「数据/导出」页导出到 `工作目录/exports/`
-- 旧版 Tk GUI（可选）：`python -m tk_gui`
 
 ---
 
@@ -170,8 +169,9 @@ oai-team-auto-provisioner/
 │
 ├── 🛠️  utils.py               # 工具函数 (CSV、状态追踪)
 ├── 📊 logger.py              # 日志模块
-├── 🧩 tk_gui/                # Tkinter 图形界面（旧版，独立目录）
+├── 🧩 gui_core/              # GUI 后端共享模块（无界面）
 ├── 🌐 webview_gui/           # pywebview 图形界面（新版，独立目录）
+├── 🧰 scripts/               # 打包/脚本
 │
 ├── 📝 config.toml.example    # 配置模板
 ├── 🔑 team.json.example      # Team 凭证模板

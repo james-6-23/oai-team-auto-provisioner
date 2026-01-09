@@ -37,7 +37,7 @@ def 获取运行目录() -> 运行目录:
         meipass = Path(getattr(sys, "_MEIPASS")).resolve()
         return 运行目录(工作目录=exe_dir, 临时解压目录=meipass)
 
-    # 源码运行：`tk_gui/` 在仓库根目录下
+    # 源码运行：`gui_core/` 在仓库根目录下
     repo_root = Path(__file__).resolve().parents[1]
     return 运行目录(工作目录=repo_root, 临时解压目录=None)
 
@@ -88,4 +88,3 @@ def 复制外部配置到临时解压目录(run_dirs: 运行目录) -> None:
         except Exception:
             # 复制失败不应直接崩溃；由后续读取配置时报错提示用户
             pass
-
