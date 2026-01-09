@@ -33,9 +33,9 @@ if ($LASTEXITCODE -ne 0) { throw "Failed to install runtime dependencies (requir
 
 & $py -m PyInstaller --noconfirm --clean --onefile --noconsole --name oai-team-gui `
   --specpath "build" `
-  --add-data ".\\config.toml.example;." `
-  --add-data ".\\team.json.example;." `
-  --add-data ".\\webview_gui\\assets;webview_gui\\assets" `
+  --add-data "$(Join-Path $repo "config.toml.example");." `
+  --add-data "$(Join-Path $repo "team.json.example");." `
+  --add-data "$(Join-Path $repo "webview_gui\\assets");webview_gui\\assets" `
   "gui_main.py"
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed" }
 
