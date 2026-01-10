@@ -43,7 +43,7 @@
 uv sync
 
 # 或使用 pip
-pip install -r requirements.txt
+python -m pip install -e .
 ```
 
 ### 2. 配置（程序内置，推荐）
@@ -137,40 +137,19 @@ uv run python run.py help
 ```bash
 # 安装依赖（任选其一）
 uv sync
-# 或：pip install -e .
+# 或：python -m pip install -e .
 
 # 源码运行
 python -m webview_gui
 
 # 打包为单文件 EXE（Windows）
-powershell -ExecutionPolicy Bypass -File .\\tk_gui\\build_onefile.ps1
+powershell -ExecutionPolicy Bypass -File .\\webview_gui\\build_onefile.ps1
 ```
 
 - 打包产物：`dist/oai-team-gui.exe`
 - EXE 运行时：首次启动后在 GUI「配置编辑」页保存配置（配置存于程序内部存储，无需外置 `config.toml` / `team.json`）
 - 新增模式：GUI「运行」页提供“批量注册 OpenAI（仅注册）”，支持邮箱来源选择（域名邮箱/随机邮箱）
 - 输出记录：账号/凭据/追踪都写入程序内部存储；需要文件时在「数据/导出」页导出到 `工作目录/exports/`
-- 旧版 Tk GUI（可选）：`python -m tk_gui`
-
----
-
-### 6. 图形化界面（Flet GUI，可选）
-
-> 适合追求更“App 化”外观的桌面 UI；与现有业务逻辑解耦，作为可选技术栈提供。
-
-```bash
-# 安装依赖
-python -m pip install -U flet
-
-# 源码运行
-python -m flet_gui
-
-# 打包（Windows）
-powershell -ExecutionPolicy Bypass -File .\\flet_gui\\build_windows.ps1
-```
-
-- 打包产物：`dist/flet-gui/`
-- 输出记录：同样使用内部存储；需要文件时在「数据/导出」页导出到 `工作目录/exports/`
 
 ---
 
@@ -190,9 +169,7 @@ oai-team-auto-provisioner/
 │
 ├── 🛠️  utils.py               # 工具函数 (CSV、状态追踪)
 ├── 📊 logger.py              # 日志模块
-├── 🧩 tk_gui/                # Tkinter 图形界面（旧版，独立目录）
-├── 🌐 webview_gui/           # pywebview 图形界面（新版，独立目录）
-├── 🎛️ flet_gui/              # Flet 图形界面（可选，独立目录）
+├── 🌐 webview_gui/           # pywebview 图形界面（WebView2）
 │
 ├── 📝 config.toml.example    # 配置模板
 ├── 🔑 team.json.example      # Team 凭证模板

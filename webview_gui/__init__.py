@@ -2,6 +2,6 @@
 
 运行：
 - 源码：`python -m webview_gui`
-- 打包：使用仓库内的打包脚本生成单文件 exe
+- 打包：`powershell -ExecutionPolicy Bypass -File ./webview_gui/build_onefile.ps1`
 """
 

@@ -2,7 +2,7 @@
 
 说明：
 - 尽量不改动现有业务代码，仅提供一个现代 UI 外壳。
-- 任务执行复用 `tk_gui/worker.py`，日志通过 `tk_gui/io_redirect.py` 捕获并在前端展示。
+- 任务执行与日志捕获均在 `webview_gui/` 包内实现，避免与其他 GUI 技术栈耦合。
 - onefile 打包时，静态资源会解压到 `sys._MEIPASS`，需通过运行时探测来定位。
 """
 
@@ -24,9 +24,9 @@ import tomllib
 
 import internal_config_store
 import internal_output_store
-from tk_gui import runtime
-from tk_gui.io_redirect import 输出重定向
-from tk_gui import worker
+from . import runtime
+from .io_redirect import 输出重定向
+from . import worker
 
 try:
     import webview

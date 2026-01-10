@@ -1,6 +1,6 @@
 """标准输出重定向工具。
 
-用于把现有项目中的 `print()` 日志（含 logger 模块输出）转发到 Tkinter 界面。
+用于把现有项目中的 `print()` 日志（含 logger 模块输出）转发到 GUI 界面。
 """
 
 from __future__ import annotations
@@ -63,3 +63,4 @@ class 输出重定向:
         if self._old_stderr is not None:
             sys.stderr = self._old_stderr  # type: ignore[assignment]
         return False
+

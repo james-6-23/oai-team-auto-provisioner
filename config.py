@@ -5,13 +5,7 @@ import re
 import string
 from pathlib import Path
 
-try:
-    import tomllib
-except ImportError:
-    try:
-        import tomli as tomllib
-    except ImportError:
-        tomllib = None
+import tomllib
 
 # ==================== 路径 ====================
 BASE_DIR = Path(__file__).parent
@@ -29,9 +23,6 @@ def _load_internal_payload() -> dict:
 
 
 def _load_toml() -> dict:
-    if tomllib is None:
-        return {}
-
     payload = _load_internal_payload()
     internal_text = payload.get("config_toml") if isinstance(payload, dict) else None
     if not isinstance(internal_text, str) or not internal_text.strip():

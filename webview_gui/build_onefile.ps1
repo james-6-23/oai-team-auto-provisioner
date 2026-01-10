@@ -1,12 +1,12 @@
 $ErrorActionPreference = "Stop"
 
 # Run from repo root:
-#   powershell -ExecutionPolicy Bypass -File .\\tk_gui\\build_onefile.ps1
+#   powershell -ExecutionPolicy Bypass -File "./webview_gui/build_onefile.ps1"
 
 $repo = Resolve-Path (Join-Path $PSScriptRoot "..")
 Set-Location $repo
 
-$venvPy = Join-Path $repo ".venv\\Scripts\\python.exe"
+$venvPy = Join-Path $repo ".venv/Scripts/python.exe"
 $py = if (Test-Path $venvPy) { $venvPy } else { "python" }
 
 if (Get-Process -Name "oai-team-gui" -ErrorAction SilentlyContinue) {
@@ -26,12 +26,13 @@ if ($LASTEXITCODE -ne 0) { throw "Failed to install PyInstaller" }
 & $py -m pip install -U pywebview
 if ($LASTEXITCODE -ne 0) { throw "Failed to install pywebview" }
 
-& $py -m PyInstaller --noconfirm --clean --onefile --noconsole --name oai-team-gui `
+& $py -m PyInstaller --noconfirm --clean --onefile --noconsole --name "oai-team-gui" `
   --specpath "build" `
-  --add-data "..\\config.toml.example;." `
-  --add-data "..\\team.json.example;." `
-  --add-data "..\\webview_gui\\assets;webview_gui\\assets" `
+  --add-data "config.toml.example;." `
+  --add-data "team.json.example;." `
+  --add-data "webview_gui/assets;webview_gui/assets" `
   "gui_main.py"
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed" }
 
 Write-Host "Done: dist/oai-team-gui.exe"
+

@@ -25,6 +25,7 @@ def _应停止(stop_event: threading.Event) -> bool:
 
 def _加载并刷新模块():
     """按当前配置重新加载核心模块，保证 GUI 修改配置后立即生效。"""
+
     import config as config_module
 
     config_module = importlib.reload(config_module)
@@ -111,8 +112,7 @@ def _process_single_team(mods, team: dict, stop_event: threading.Event) -> list[
         for acc in incomplete:
             log.step(f"{acc['email']} (状态: {acc['status']})")
         invited_accounts = [
-            {"email": acc["email"], "password": acc.get("password") or config.DEFAULT_PASSWORD}
-            for acc in incomplete
+            {"email": acc["email"], "password": acc.get("password") or config.DEFAULT_PASSWORD} for acc in incomplete
         ]
         log.info("继续处理未完成账号...", icon="start")
     else:
@@ -448,6 +448,7 @@ def _创建邮箱列表_for_register(mods, count: int, email_source: str, stop_e
 
 def _register_openai_only(mods, email: str, password: str) -> bool:
     """只注册 OpenAI 账号，不执行 Codex 授权/CRS 入库。"""
+
     log = mods["logger"].log
     browser_automation = mods["browser_automation"]
 
@@ -481,10 +482,11 @@ def _register_openai_only(mods, email: str, password: str) -> bool:
 def batch_register_openai(count: int, email_source: str, stop_event: threading.Event) -> list[dict]:
     """批量注册 OpenAI 账号（仅注册）。
 
-功能：
-- 邮箱来源可选：domain（域名邮箱 / Cloud Mail）或 gptmail（随机邮箱 / GPTMail）
-- 创建的邮箱与密码会保存到程序内部记录（可在 GUI 导出为 CSV）
-"""
+    功能：
+    - 邮箱来源可选：domain（域名邮箱 / Cloud Mail）或 gptmail（随机邮箱 / GPTMail）
+    - 创建的邮箱与密码会保存到程序内部记录（可在 GUI 导出为 CSV）
+    """
+
     run_dirs = runtime.获取运行目录()
     runtime.切换工作目录(run_dirs.工作目录)
 
@@ -495,7 +497,7 @@ def batch_register_openai(count: int, email_source: str, stop_event: threading.E
     email_service = mods["email_service"]
 
     # 根据选择强制切换验证码获取通道（避免依赖 config.toml 的 use_gptmail）
-    email_service.EMAIL_USE_GPTMAIL = (email_source == "gptmail")
+    email_service.EMAIL_USE_GPTMAIL = email_source == "gptmail"
 
     log.header("批量注册 OpenAI（仅注册）")
     log.info(f"注册数量: {count}", icon="account")
@@ -542,3 +544,4 @@ def batch_register_openai(count: int, email_source: str, stop_event: threading.E
     log.info(f"注册完成: 成功 {success}/{len(results)}")
     log.info("凭据记录：已写入程序内部存储（可在 GUI 导出）", icon="save")
     return results
+

@@ -338,15 +338,13 @@ wheels = [
 
 [[package]]
 name = "oai-team-auto-provisioner"
-version = "0.1.0"
+version = "0.5.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "customtkinter" },
     { name = "drissionpage" },
     { name = "pywebview" },
     { name = "requests" },
     { name = "setuptools" },
-    { name = "tomli" },
 ]
 
 [package.dev-dependencies]
@@ -356,12 +354,10 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "customtkinter", specifier = ">=5.2.2" },
     { name = "drissionpage", specifier = ">=4.1.1.2" },
     { name = "pywebview", specifier = ">=6.1" },
     { name = "requests", specifier = ">=2.32.5" },
     { name = "setuptools", specifier = ">=80.9.0" },
-    { name = "tomli", specifier = ">=2.3.0" },
 ]
 
 [package.metadata.requires-dev]
