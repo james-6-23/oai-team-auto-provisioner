@@ -230,9 +230,7 @@ def check_available_seats(team: dict) -> int:
 
     seats_in_use = stats.get("seats_in_use", 0)
     seats_entitled = stats.get("seats_entitled", 5)  # 默认 5 席位
-    pending = len(get_pending_invites(team))
-
-    available = seats_entitled - seats_in_use - pending
+    available = seats_entitled - seats_in_use
     return max(0, available)
 
 
