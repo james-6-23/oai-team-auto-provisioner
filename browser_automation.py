@@ -6,16 +6,29 @@ import time
 import random
 import subprocess
 import os
-from DrissionPage import ChromiumPage, ChromiumOptions
+import importlib
+from urllib.parse import urlparse, parse_qs
+
+try:
+    _drission = importlib.import_module("DrissionPage")
+    ChromiumPage = getattr(_drission, "ChromiumPage")
+    ChromiumOptions = getattr(_drission, "ChromiumOptions")
+    _DRISSION_IMPORT_ERROR = None
+except Exception as e:
+    ChromiumPage = None
+    ChromiumOptions = None
+    _DRISSION_IMPORT_ERROR = e
 
 from config import (
     BROWSER_WAIT_TIMEOUT,
     BROWSER_SHORT_WAIT,
+    USE_SUB2API,
     get_random_name,
     get_random_birthday
 )
 from email_service import get_verification_code
-from crs_service import crs_generate_auth_url, crs_exchange_code, crs_add_account, extract_code_from_url
+from crs_service import crs_generate_auth_url, crs_exchange_code
+from sub2api_service import sub2api_generate_openai_auth_url
 from logger import log
 
 
@@ -29,6 +42,18 @@ PAGE_LOAD_TIMEOUT = 15   # 页面加载超时 (秒)
 SAFE_MODE = True
 TYPING_DELAY = 0.12 if SAFE_MODE else 0.06  # 打字基础延迟
 ACTION_DELAY = (1.0, 2.0) if SAFE_MODE else (0.3, 0.8)  # 操作间隔范围
+
+
+def extract_code_from_url(url: str) -> str | None:
+    if not url:
+        return None
+    try:
+        parsed = urlparse(url)
+        params = parse_qs(parsed.query)
+        code = params.get("code", [None])[0]
+        return code
+    except Exception:
+        return None
 
 
 def cleanup_chrome_processes():
@@ -52,7 +77,7 @@ def cleanup_chrome_processes():
         pass  # 静默处理，不影响主流程
 
 
-def init_browser(max_retries: int = BROWSER_MAX_RETRIES) -> ChromiumPage:
+def init_browser(max_retries: int = BROWSER_MAX_RETRIES):
     """初始化 DrissionPage 浏览器 (带重试机制)
 
     Args:
@@ -61,9 +86,12 @@ def init_browser(max_retries: int = BROWSER_MAX_RETRIES) -> ChromiumPage:
     Returns:
         ChromiumPage: 浏览器实例
     """
+    if ChromiumPage is None or ChromiumOptions is None:
+        raise RuntimeError("DrissionPage 未安装或无法导入") from _DRISSION_IMPORT_ERROR
+
     log.info("初始化浏览器...", icon="browser")
     
-    last_error = None
+    last_error: Exception | None = None
     
     for attempt in range(max_retries):
         try:
@@ -98,7 +126,9 @@ def init_browser(max_retries: int = BROWSER_MAX_RETRIES) -> ChromiumPage:
     
     # 所有重试都失败
     log.error(f"浏览器启动失败，已重试 {max_retries} 次: {last_error}")
-    raise last_error
+    if last_error is None:
+        raise RuntimeError("浏览器启动失败")
+    raise RuntimeError("浏览器启动失败") from last_error
 
 
 def wait_for_page_stable(page, timeout: int = 10, check_interval: float = 0.5) -> bool:
@@ -160,7 +190,7 @@ def wait_for_element(page, selector: str, timeout: int = 10, visible: bool = Tru
     return None
 
 
-def wait_for_url_change(page, old_url: str, timeout: int = 15, contains: str = None) -> bool:
+def wait_for_url_change(page, old_url: str, timeout: int = 15, contains: str | None = None) -> bool:
     """等待 URL 变化
     
     Args:
@@ -187,7 +217,7 @@ def wait_for_url_change(page, old_url: str, timeout: int = 15, contains: str = N
     return False
 
 
-def type_slowly(page, selector_or_element, text, base_delay=None):
+def type_slowly(page, selector_or_element, text, base_delay: float | None = None):
     """缓慢输入文本 (模拟真人输入)
 
     Args:
@@ -225,7 +255,7 @@ def type_slowly(page, selector_or_element, text, base_delay=None):
             time.sleep(actual_delay)
 
 
-def human_delay(min_sec: float = None, max_sec: float = None):
+def human_delay(min_sec: float | None = None, max_sec: float | None = None):
     """模拟人类操作间隔
     
     Args:
@@ -584,7 +614,7 @@ def register_openai_account(page, email: str, password: str) -> bool:
         return False
 
 
-def perform_codex_authorization(page, email: str, password: str) -> dict:
+def perform_codex_authorization(page, email: str, password: str) -> dict | None:
     """执行 Codex 授权流程
 
     Args:
@@ -593,23 +623,24 @@ def perform_codex_authorization(page, email: str, password: str) -> dict:
         password: 密码
 
     Returns:
-        dict: codex_data 或 None
+        dict: {"session_id": "...", "code": "..."} 或 None
     """
     log.info(f"开始 Codex 授权: {email}", icon="code")
 
-    # 生成授权 URL
-    auth_url, session_id = crs_generate_auth_url()
+    if USE_SUB2API:
+        auth_url, session_id = sub2api_generate_openai_auth_url()
+    else:
+        auth_url, session_id = crs_generate_auth_url()
+
     if not auth_url or not session_id:
         log.error("无法获取授权 URL")
         return None
 
-    # 打开授权页面
     log.step("打开授权页面...")
     page.get(auth_url)
     wait_for_page_stable(page, timeout=5)
 
     try:
-        # 输入邮箱
         log.step("输入邮箱...")
         email_input = wait_for_element(page, 'css:input[type="email"]', timeout=10)
         if not email_input:
@@ -618,7 +649,6 @@ def perform_codex_authorization(page, email: str, password: str) -> dict:
             email_input = wait_for_element(page, '#email', timeout=5)
         type_slowly(page, 'css:input[type="email"], input[name="email"], #email', email, base_delay=0.06)
 
-        # 点击继续
         log.step("点击继续...")
         continue_btn = wait_for_element(page, 'css:button[type="submit"]', timeout=5)
         if continue_btn:
@@ -630,14 +660,12 @@ def perform_codex_authorization(page, email: str, password: str) -> dict:
         log.warning(f"邮箱输入步骤异常: {e}")
 
     try:
-        # 输入密码
         log.step("输入密码...")
         password_input = wait_for_element(page, 'css:input[type="password"]', timeout=10)
         if not password_input:
             password_input = wait_for_element(page, 'css:input[name="password"]', timeout=5)
         type_slowly(page, 'css:input[type="password"], input[name="password"]', password, base_delay=0.06)
 
-        # 点击继续
         log.step("点击继续...")
         continue_btn = wait_for_element(page, 'css:button[type="submit"]', timeout=5)
         if continue_btn:
@@ -648,8 +676,7 @@ def perform_codex_authorization(page, email: str, password: str) -> dict:
     except Exception as e:
         log.warning(f"密码输入步骤异常: {e}")
 
-    # 等待授权回调
-    max_wait = 45  # 减少等待时间
+    max_wait = 45
     start_time = time.time()
     code = None
     progress_shown = False
@@ -659,7 +686,6 @@ def perform_codex_authorization(page, email: str, password: str) -> dict:
         try:
             current_url = page.url
 
-            # 检查是否到达回调页面
             if "localhost:1455/auth/callback" in current_url and "code=" in current_url:
                 if progress_shown:
                     log.progress_clear()
@@ -669,7 +695,6 @@ def perform_codex_authorization(page, email: str, password: str) -> dict:
                     log.success("提取授权码成功")
                     break
 
-            # 尝试点击授权按钮
             try:
                 buttons = page.eles('css:button[type="submit"]')
                 for btn in buttons:
@@ -681,7 +706,7 @@ def perform_codex_authorization(page, email: str, password: str) -> dict:
                                 progress_shown = False
                             log.step(f"点击按钮: {btn.text}")
                             btn.click()
-                            time.sleep(1.5)  # 减少等待
+                            time.sleep(1.5)
                             break
             except Exception:
                 pass
@@ -689,7 +714,7 @@ def perform_codex_authorization(page, email: str, password: str) -> dict:
             elapsed = int(time.time() - start_time)
             log.progress_inline(f"[等待中... {elapsed}s]")
             progress_shown = True
-            time.sleep(1.5)  # 减少轮询间隔
+            time.sleep(1.5)
 
         except Exception as e:
             if progress_shown:
@@ -713,19 +738,21 @@ def perform_codex_authorization(page, email: str, password: str) -> dict:
         log.error("无法获取授权码")
         return None
 
-    # 交换 tokens
+    if USE_SUB2API:
+        log.success("Codex 授权成功")
+        return {"session_id": session_id, "code": code}
+
     log.step("交换 tokens...")
     codex_data = crs_exchange_code(code, session_id)
-
     if codex_data:
         log.success("Codex 授权成功")
         return codex_data
-    else:
-        log.error("Token 交换失败")
-        return None
+
+    log.error("Token 交换失败")
+    return None
 
 
-def register_and_authorize(email: str, password: str) -> tuple[bool, dict]:
+def register_and_authorize(email: str, password: str) -> tuple[bool, dict | None]:
     """完整流程: 注册 OpenAI + Codex 授权 (带重试机制)
 
     Args:
@@ -733,7 +760,7 @@ def register_and_authorize(email: str, password: str) -> tuple[bool, dict]:
         password: 密码
 
     Returns:
-        tuple: (register_success, codex_data)
+        tuple: (register_success, auth_result)
     """
     page = None
     max_browser_retries = 2  # 整体流程重试次数
@@ -762,9 +789,9 @@ def register_and_authorize(email: str, password: str) -> tuple[bool, dict]:
             time.sleep(0.5)
 
             # Codex 授权
-            codex_data = perform_codex_authorization(page, email, password)
+            auth_result = perform_codex_authorization(page, email, password)
 
-            return True, codex_data
+            return True, auth_result
 
         except Exception as e:
             log.error(f"流程异常: {e}")

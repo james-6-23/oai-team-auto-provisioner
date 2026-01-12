@@ -22,6 +22,20 @@ gptmail_api_key = "gpt-test"
 api_base = "https://your-crs-service.com"
 admin_token = "your-admin-token"
 
+# ==================== 入库目标 ====================
+[sink]
+use_sub2api = false
+
+# ==================== Sub2API 服务配置 ====================
+[sub2api]
+api_base = "https://your-sub2api.com"
+admin_api_key = "admin-xxxxxxxx"
+admin_jwt = ""
+proxy_id = 0
+openai_group_ids = [1]
+openai_concurrency = 3
+openai_priority = 50
+
 # ==================== 账号配置 ====================
 [account]
 default_password = "YourSecurePassword@2025"
