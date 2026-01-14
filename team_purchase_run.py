@@ -47,16 +47,25 @@ def fetch_chatgpt_auth_session(page) -> dict | None:
 
 
 def login_openai_account(page, email: str, password: str) -> bool:
+    stage = "init"
+    failed_stage: str | None = None
+    last_error: str | None = None
+
     try:
+        stage = "open_login_page"
         page.get("https://auth.openai.com/log-in-or-create-account")
         wait_for_page_stable(page, timeout=8)
 
+        # 有些情况下可能已经是登录态
+        stage = "check_already_logged_in"
         try:
-            if "chatgpt.com" in page.url and is_logged_in(page):
+            if "chatgpt.com" in (page.url or "") and is_logged_in(page):
                 return True
-        except Exception:
-            pass
+        except Exception as e:
+            failed_stage = failed_stage or stage
+            last_error = f"check_already_logged_in: {e}"
 
+        stage = "input_email"
         try:
             type_slowly(
                 page,
@@ -69,9 +78,11 @@ def login_openai_account(page, email: str, password: str) -> bool:
                 old_url = page.url
                 btn.click()
                 wait_for_url_change(page, old_url, timeout=15)
-        except Exception:
-            pass
+        except Exception as e:
+            failed_stage = failed_stage or stage
+            last_error = f"input_email: {e}"
 
+        stage = "input_password"
         try:
             type_slowly(
                 page,
@@ -84,14 +95,46 @@ def login_openai_account(page, email: str, password: str) -> bool:
                 old_url = page.url
                 btn.click()
                 wait_for_url_change(page, old_url, timeout=20)
+        except Exception as e:
+            failed_stage = failed_stage or stage
+            last_error = f"input_password: {e}"
+
+        stage = "open_chatgpt_home"
+        try:
+            page.get("https://chatgpt.com")
+            wait_for_page_stable(page, timeout=10)
+        except Exception as e:
+            failed_stage = failed_stage or stage
+            last_error = f"open_chatgpt_home: {e}"
+
+        stage = "verify_login"
+        try:
+            ok = bool(is_logged_in(page))
+        except Exception as e:
+            ok = False
+            failed_stage = failed_stage or stage
+            last_error = f"verify_login: {e}"
+
+        if not ok:
+            url = ""
+            try:
+                url = str(page.url or "")
+            except Exception:
+                url = ""
+
+            stage_for_log = failed_stage or stage
+            detail = f"，原因: {last_error}" if last_error else ""
+            log.warning(f"登录失败（阶段: {stage_for_log}，url: {url}）{detail}")
+
+        return ok
+
+    except Exception as e:
+        url = ""
+        try:
+            url = str(page.url or "")
         except Exception:
-            pass
-
-        page.get("https://chatgpt.com")
-        wait_for_page_stable(page, timeout=10)
-        return is_logged_in(page)
-
-    except Exception:
+            url = ""
+        log.warning(f"登录流程异常（阶段: {stage}，url: {url}）：{e}")
         return False
 
 
@@ -116,9 +159,13 @@ def click_continue_checkout(page) -> bool:
     ]
 
     old_url = page.url
+    last_stage: str | None = None
+    last_error: str | None = None
+    last_candidate_text: str = ""
 
     for _ in range(8):
         try:
+            last_stage = "scan_buttons"
             buttons = page.eles("css:button")
             for btn in buttons:
                 if not btn.states.is_displayed or not btn.states.is_enabled:
@@ -127,16 +174,41 @@ def click_continue_checkout(page) -> bool:
                 if not text:
                     continue
                 if any(k in text for k in keywords):
-                    btn.click()
+                    last_candidate_text = text
+                    last_stage = "click_candidate_button"
+                    try:
+                        btn.click()
+                    except Exception as e:
+                        last_error = f"click_failed: {e}"
+                        continue
+
                     time.sleep(1)
-                    if wait_for_url_change(page, old_url, timeout=20):
-                        return True
+                    last_stage = "wait_url_change"
+                    try:
+                        if wait_for_url_change(page, old_url, timeout=20):
+                            return True
+                    except Exception as e:
+                        last_error = f"wait_url_change_failed: {e}"
+
                     old_url = page.url
                     return True
-        except Exception:
-            pass
+        except Exception as e:
+            last_stage = last_stage or "scan_buttons"
+            last_error = f"scan_buttons_failed: {e}"
 
         time.sleep(1)
+
+    if last_error:
+        url = ""
+        try:
+            url = str(page.url or "")
+        except Exception:
+            url = ""
+        hint = f"，候选按钮: {last_candidate_text}" if last_candidate_text else ""
+        stage_hint = f"阶段: {last_stage}，" if last_stage else ""
+        log.warning(
+            f"未能自动进入结算页（{stage_hint}url: {url}）{hint}，原因: {last_error}"
+        )
 
     return False
 
@@ -295,7 +367,9 @@ def run_single(
         log.step("点击继续结算...")
         clicked = click_continue_checkout(page)
         if not clicked:
-            log.warning("未找到可点击的结算按钮，可能需要你手动点")
+            log.warning(
+                "未找到可点击的结算按钮，可能需要你手动点（或页面按钮文案/结构有变化）"
+            )
 
         log.info("请在浏览器中手动填写银行卡信息、账单地址，并完成验证码/3DS 验证")
         log.info("脚本将每 5s 轮询 /api/auth/session，直到 planType 变为 team")
