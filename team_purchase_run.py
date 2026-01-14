@@ -56,48 +56,79 @@ def login_openai_account(page, email: str, password: str) -> bool:
         page.get("https://auth.openai.com/log-in-or-create-account")
         wait_for_page_stable(page, timeout=8)
 
-        # 有些情况下可能已经是登录态
-        stage = "check_already_logged_in"
+        stage = "input_email"
+        email_selector = 'css:input[type="email"], input[name="email"], #email'
+        email_input = wait_for_element(page, email_selector, timeout=12)
+        if not email_input:
+            failed_stage = failed_stage or stage
+            last_error = "未找到邮箱输入框（可能已是登录态/页面结构变化/出现风控验证）"
+            url = ""
+            try:
+                url = str(page.url or "")
+            except Exception:
+                url = ""
+            log.warning(
+                f"登录失败（阶段: {failed_stage}，url: {url}），原因: {last_error}"
+            )
+            return False
+
         try:
-            if "chatgpt.com" in (page.url or "") and is_logged_in(page):
-                return True
+            type_slowly(page, email_selector, email, base_delay=0.06)
         except Exception as e:
             failed_stage = failed_stage or stage
-            last_error = f"check_already_logged_in: {e}"
+            last_error = f"input_email: {e}"
 
-        stage = "input_email"
+        stage = "submit_email"
         try:
-            type_slowly(
-                page,
-                'css:input[type="email"], input[name="email"], #email',
-                email,
-                base_delay=0.06,
-            )
             btn = wait_for_element(page, 'css:button[type="submit"]', timeout=12)
             if btn:
                 old_url = page.url
                 btn.click()
                 wait_for_url_change(page, old_url, timeout=15)
+            else:
+                failed_stage = failed_stage or stage
+                last_error = "未找到邮箱提交按钮"
         except Exception as e:
             failed_stage = failed_stage or stage
-            last_error = f"input_email: {e}"
+            last_error = f"submit_email: {e}"
 
         stage = "input_password"
-        try:
-            type_slowly(
-                page,
-                'css:input[type="password"], input[name="password"]',
-                password,
-                base_delay=0.06,
+        pwd_selector = 'css:input[type="password"], input[name="password"]'
+        password_input = wait_for_element(page, pwd_selector, timeout=12)
+        if not password_input:
+            failed_stage = failed_stage or stage
+            last_error = (
+                last_error or "未找到密码输入框（可能需要你手动选择账号/跳转异常）"
             )
+            url = ""
+            try:
+                url = str(page.url or "")
+            except Exception:
+                url = ""
+            log.warning(
+                f"登录失败（阶段: {failed_stage}，url: {url}），原因: {last_error}"
+            )
+            return False
+
+        try:
+            type_slowly(page, pwd_selector, password, base_delay=0.06)
+        except Exception as e:
+            failed_stage = failed_stage or stage
+            last_error = f"input_password: {e}"
+
+        stage = "submit_password"
+        try:
             btn = wait_for_element(page, 'css:button[type="submit"]', timeout=12)
             if btn:
                 old_url = page.url
                 btn.click()
                 wait_for_url_change(page, old_url, timeout=20)
+            else:
+                failed_stage = failed_stage or stage
+                last_error = "未找到密码提交按钮"
         except Exception as e:
             failed_stage = failed_stage or stage
-            last_error = f"input_password: {e}"
+            last_error = f"submit_password: {e}"
 
         stage = "open_chatgpt_home"
         try:
@@ -128,6 +159,8 @@ def login_openai_account(page, email: str, password: str) -> bool:
 
         return ok
 
+    except KeyboardInterrupt:
+        raise
     except Exception as e:
         url = ""
         try:
@@ -349,20 +382,50 @@ def run_single(
             log.error("注册失败")
             return False
 
+        log.step("打开/刷新 ChatGPT 首页（用于确认登录态）...")
         try:
             page.get("https://chatgpt.com")
             wait_for_page_stable(page, timeout=10)
         except Exception:
             pass
 
-        if not is_logged_in(page):
-            log.step("登录账号...")
-            if not login_openai_account(page, email, password):
-                log.error("登录失败")
-                return False
+        log.warning(
+            "请确认浏览器里已登录（能正常对话/右上角有账号信息），确认后按回车继续。"
+        )
+        try:
+            input("   ⚠️ 确认已登录后按回车继续: ")
+        except KeyboardInterrupt:
+            raise
+        except Exception:
+            # 非交互环境下忽略 input 失败
+            pass
 
+        # 不再强依赖 is_logged_in() 判断。
+        # 直接进入 seat selection：如果未登录，chatgpt.com 会自行跳转到 auth.openai.com。
         log.step("进入 Team 套餐选择页...")
         open_team_seat_selection(page, num_seats=num_seats, selected_plan=selected_plan)
+
+        if "auth.openai.com" in (page.url or ""):
+            log.warning(
+                "检测到跳转到登录页：请在浏览器中手动完成登录（包含可能的验证码/风控校验），完成后按回车继续。"
+            )
+            try:
+                input("   ⚠️ 手动登录完成后按回车继续: ")
+            except KeyboardInterrupt:
+                raise
+            except Exception:
+                # 非交互环境下忽略 input 失败
+                pass
+
+            log.step("重新进入 Team 套餐选择页...")
+            open_team_seat_selection(
+                page, num_seats=num_seats, selected_plan=selected_plan
+            )
+
+            if "auth.openai.com" in (page.url or ""):
+                log.warning(
+                    "仍处于登录页/未完成跳转：你可以继续手动操作，或直接在浏览器打开 chatgpt.com 后重试"
+                )
 
         log.step("点击继续结算...")
         clicked = click_continue_checkout(page)
