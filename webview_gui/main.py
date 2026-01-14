@@ -22,8 +22,8 @@ from typing import Any, Optional
 
 import tomllib
 
-import internal_config_store
-import internal_output_store
+from tools import internal_config_store
+from tools import internal_output_store
 from . import runtime
 from .io_redirect import 输出重定向
 from . import worker

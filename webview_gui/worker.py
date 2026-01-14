@@ -12,7 +12,7 @@ import random
 import threading
 
 from . import runtime
-import internal_output_store
+from tools import internal_output_store
 
 
 class 任务异常(Exception):

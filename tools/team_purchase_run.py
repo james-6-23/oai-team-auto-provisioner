@@ -10,16 +10,27 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from browser_automation import (
-    init_browser,
-    is_logged_in,
-    register_openai_account,
-    type_slowly,
-    wait_for_element,
-    wait_for_page_stable,
-    wait_for_url_change,
-)
-from email_service import batch_create_emails
+try:
+    from browser_automation import (
+        init_browser,
+        is_logged_in,
+        register_openai_account,
+        type_slowly,
+        wait_for_element,
+        wait_for_page_stable,
+        wait_for_url_change,
+    )
+except ModuleNotFoundError as e:
+    missing = str(e)
+    raise SystemExit(
+        "缺少依赖或运行路径异常，无法导入 browser_automation。\n"
+        "常见原因：未安装 DrissionPage。\n"
+        "解决：pip install -r requirements.txt\n"
+        f"错误：{missing}"
+    )
+
+from config import add_domain_to_blacklist, get_domain_from_email, is_email_blacklisted
+from email_service import batch_create_emails, unified_create_email
 from logger import log
 
 
@@ -49,6 +60,36 @@ def fetch_chatgpt_auth_session(page) -> dict | None:
         return data if isinstance(data, dict) else None
     except Exception:
         return None
+
+
+def _fmt_url(page) -> str:
+    try:
+        return str(page.url or "")
+    except Exception:
+        return ""
+
+
+def _next_account_from_provider(max_attempts: int = 5) -> tuple[str | None, str | None]:
+    for _ in range(max(1, int(max_attempts))):
+        email, password = unified_create_email()
+        email = str(email or "").strip()
+        password = str(password or "").strip()
+
+        if not email:
+            continue
+        if is_email_blacklisted(email):
+            continue
+
+        return email, password
+
+    accounts = batch_create_emails(1)
+    if accounts:
+        email = str(accounts[0].get("email") or "").strip()
+        password = str(accounts[0].get("password") or "").strip()
+        if email and not is_email_blacklisted(email):
+            return email, password
+
+    return None, None
 
 
 def login_openai_account(page, email: str, password: str) -> bool:
@@ -330,7 +371,12 @@ def upsert_team_json(team_json_path: Path, session: dict) -> None:
 
 
 def append_session_csv(
-    csv_path: Path, email: str, password: str, session: dict
+    csv_path: Path,
+    *,
+    email: str,
+    password: str,
+    session: dict,
+    checkout_url: str,
 ) -> None:
     csv_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -350,12 +396,14 @@ def append_session_csv(
     access_token = str(session.get("accessToken") or "")
 
     row = {
+        "createdAt": time.strftime("%Y-%m-%d %H:%M:%S"),
         "email": email,
         "password": password,
         "planType": plan_type,
         "accountId": account_id,
         "organizationId": organization_id,
         "expires": expires,
+        "checkoutUrl": checkout_url or "",
         "accessToken": access_token,
         "sessionJson": json.dumps(session, ensure_ascii=False),
     }
@@ -370,22 +418,34 @@ def append_session_csv(
 
 
 def run_single(
+    *,
     email: str,
     password: str,
     num_seats: int,
     selected_plan: str,
     team_json: Path | None,
     csv_path: Path,
-) -> bool:
+    wait_timeout_sec: int,
+    poll_interval_sec: int,
+    interactive: bool,
+) -> str:
     page = None
 
     try:
         page = init_browser()
 
         log.step("注册账号...")
-        if not register_openai_account(page, email, password):
+        register_result = register_openai_account(page, email, password)
+        if register_result == "domain_blacklisted":
+            domain = get_domain_from_email(email)
+            if domain:
+                add_domain_to_blacklist(domain)
+            log.error("注册失败：邮箱域名不被支持")
+            return "domain_blacklisted"
+
+        if register_result is not True:
             log.error("注册失败")
-            return False
+            return "failed"
 
         log.step("打开/刷新 ChatGPT 首页（用于确认登录态）...")
         try:
@@ -394,58 +454,57 @@ def run_single(
         except Exception:
             pass
 
-        log.warning(
-            "请确认浏览器里已登录（能正常对话/右上角有账号信息），确认后按回车继续。"
-        )
-        try:
-            input("   ⚠️ 确认已登录后按回车继续: ")
-        except KeyboardInterrupt:
-            raise
-        except Exception:
-            # 非交互环境下忽略 input 失败
-            pass
+        if interactive:
+            log.warning("请确认浏览器里已登录（能正常对话/右上角有账号信息），确认后按回车继续。")
+            try:
+                input("   ⚠️ 确认已登录后按回车继续: ")
+            except KeyboardInterrupt:
+                raise
+            except Exception:
+                pass
+        else:
+            if not is_logged_in(page):
+                if not login_openai_account(page, email, password):
+                    log.error("未能自动确认登录态")
+                    return "failed"
 
-        # 不再强依赖 is_logged_in() 判断。
-        # 直接进入 seat selection：如果未登录，chatgpt.com 会自行跳转到 auth.openai.com。
         log.step("进入 Team 套餐选择页...")
         open_team_seat_selection(page, num_seats=num_seats, selected_plan=selected_plan)
 
         if "auth.openai.com" in (page.url or ""):
-            log.warning(
-                "检测到跳转到登录页：请在浏览器中手动完成登录（包含可能的验证码/风控校验），完成后按回车继续。"
-            )
-            try:
-                input("   ⚠️ 手动登录完成后按回车继续: ")
-            except KeyboardInterrupt:
-                raise
-            except Exception:
-                # 非交互环境下忽略 input 失败
-                pass
+            if interactive:
+                log.warning("检测到跳转到登录页：请在浏览器中手动完成登录（含验证码/风控校验），完成后按回车继续。")
+                try:
+                    input("   ⚠️ 手动登录完成后按回车继续: ")
+                except KeyboardInterrupt:
+                    raise
+                except Exception:
+                    pass
 
-            log.step("重新进入 Team 套餐选择页...")
-            open_team_seat_selection(
-                page, num_seats=num_seats, selected_plan=selected_plan
-            )
-
-            if "auth.openai.com" in (page.url or ""):
-                log.warning(
-                    "仍处于登录页/未完成跳转：你可以继续手动操作，或直接在浏览器打开 chatgpt.com 后重试"
-                )
+                log.step("重新进入 Team 套餐选择页...")
+                open_team_seat_selection(page, num_seats=num_seats, selected_plan=selected_plan)
+            else:
+                log.error(f"需要手动登录才能继续（url: {_fmt_url(page)}）")
+                return "failed"
 
         log.step("点击继续结算...")
         clicked = click_continue_checkout(page)
         if not clicked:
-            log.warning(
-                "未找到可点击的结算按钮，可能需要你手动点（或页面按钮文案/结构有变化）"
-            )
+            log.warning("未找到可点击的结算按钮，可能需要你手动点（或页面按钮文案/结构有变化）")
+
+        checkout_url = _fmt_url(page)
 
         log.info("请在浏览器中手动填写银行卡信息、账单地址，并完成验证码/3DS 验证")
-        log.info("脚本将每 5s 轮询 /api/auth/session，直到 planType 变为 team")
+        log.info(f"脚本将每 {int(poll_interval_sec)}s 轮询 /api/auth/session，直到 planType 变为 team")
 
-        session = wait_until_team_active(page, timeout_sec=1800, interval_sec=5)
+        session = wait_until_team_active(
+            page,
+            timeout_sec=int(wait_timeout_sec),
+            interval_sec=int(poll_interval_sec),
+        )
         if not session:
             log.error("等待超时：未检测到 team 生效")
-            return False
+            return "failed"
 
         log.success("检测到 Team 已生效")
 
@@ -453,9 +512,15 @@ def run_single(
             upsert_team_json(team_json, session)
             log.success(f"已写入: {str(team_json)}")
 
-        append_session_csv(csv_path, email=email, password=password, session=session)
+        append_session_csv(
+            csv_path,
+            email=email,
+            password=password,
+            session=session,
+            checkout_url=checkout_url,
+        )
         log.success(f"已追加: {str(csv_path)}")
-        return True
+        return "success"
 
     finally:
         if page:
@@ -472,6 +537,10 @@ def main() -> int:
     parser.add_argument("--plan", type=str, default="month")
     parser.add_argument("--team-json", type=str, default="")
     parser.add_argument("--csv", type=str, default="team_sessions.csv")
+    parser.add_argument("--wait-timeout-sec", type=int, default=1800)
+    parser.add_argument("--poll-interval-sec", type=int, default=5)
+    parser.add_argument("--max-total-attempts", type=int, default=10)
+    parser.add_argument("--non-interactive", action="store_true")
 
     args = parser.parse_args()
 
@@ -479,47 +548,68 @@ def main() -> int:
     num_seats = max(1, min(int(args.num_seats), 100))
     selected_plan = (args.plan or "month").strip() or "month"
 
+    wait_timeout_sec = max(60, int(args.wait_timeout_sec or 1800))
+    poll_interval_sec = max(2, int(args.poll_interval_sec or 5))
+    max_total_attempts = max(count, int(args.max_total_attempts or 10))
+    interactive = not bool(args.non_interactive)
+
     team_json_path = (
         Path(args.team_json) if (args.team_json and args.team_json.strip()) else None
     )
     csv_path = Path(args.csv)
 
     log.header("Team 开通自动化（独立流程）")
-    log.info(f"数量: {count}")
+    log.info(f"目标成功数量: {count}")
     log.info(f"Seats: {num_seats}")
     log.info(f"Plan: {selected_plan}")
+    log.info(f"Interactive: {interactive}")
+    log.info(f"Wait timeout: {wait_timeout_sec}s")
+    log.info(f"Poll interval: {poll_interval_sec}s")
     log.info(f"Team JSON: {str(team_json_path) if team_json_path else '(disabled)'}")
     log.info(f"CSV: {str(csv_path)}")
 
-    accounts = batch_create_emails(count)
-    if not accounts:
-        log.error("邮箱创建失败")
-        return 2
-
     ok_count = 0
+    attempt_count = 0
 
-    for acc in accounts:
-        email = str(acc.get("email") or "").strip()
-        password = str(acc.get("password") or "").strip()
-        if not email or not password:
+    while ok_count < count and attempt_count < max_total_attempts:
+        attempt_count += 1
+
+        email, password = _next_account_from_provider()
+        email = str(email or "").strip()
+        password = str(password or "").strip()
+
+        if not email:
+            log.warning("邮箱创建失败，跳过")
+            continue
+
+        if is_email_blacklisted(email):
+            log.warning(f"邮箱域名在黑名单中，跳过: {email}")
             continue
 
         log.separator("-", 60)
-        log.info(f"处理账号: {email}", icon="account")
+        log.info(f"处理账号: {email} ({ok_count + 1}/{count})", icon="account")
 
-        ok = run_single(
+        status = run_single(
             email=email,
             password=password,
             num_seats=num_seats,
             selected_plan=selected_plan,
             team_json=team_json_path,
             csv_path=csv_path,
+            wait_timeout_sec=wait_timeout_sec,
+            poll_interval_sec=poll_interval_sec,
+            interactive=interactive,
         )
-        if ok:
+
+        if status == "success":
             ok_count += 1
+            continue
+
+        if status == "domain_blacklisted":
+            continue
 
     log.separator("=", 60)
-    log.info(f"完成: {ok_count}/{count}")
+    log.info(f"完成: {ok_count}/{count} (attempts: {attempt_count})")
     return 0 if ok_count == count else 1
 
 
