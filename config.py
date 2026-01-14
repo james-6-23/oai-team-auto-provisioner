@@ -5,13 +5,7 @@ import re
 import string
 from pathlib import Path
 
-try:
-    import tomllib
-except ImportError:
-    try:
-        import tomli as tomllib
-    except ImportError:
-        tomllib = None
+import tomllib
 
 # ==================== 路径 ====================
 BASE_DIR = Path(__file__).parent
@@ -29,9 +23,6 @@ def _load_internal_payload() -> dict:
 
 
 def _load_toml() -> dict:
-    if tomllib is None:
-        return {}
-
     payload = _load_internal_payload()
     internal_text = payload.get("config_toml") if isinstance(payload, dict) else None
     if not isinstance(internal_text, str) or not internal_text.strip():
@@ -89,6 +80,37 @@ GPTMAIL_API_KEY = str(_email.get("gptmail_api_key", "gpt-test")).strip()
 _crs = _cfg.get("crs", {})
 CRS_API_BASE = _crs.get("api_base", "")
 CRS_ADMIN_TOKEN = _crs.get("admin_token", "")
+
+_sink = _cfg.get("sink", {})
+USE_SUB2API = bool(_sink.get("use_sub2api", False))
+
+_sub2api = _cfg.get("sub2api", {})
+SUB2API_API_BASE = str(_sub2api.get("api_base", "")).strip()
+SUB2API_ADMIN_API_KEY = str(_sub2api.get("admin_api_key", "")).strip()
+SUB2API_ADMIN_JWT = str(_sub2api.get("admin_jwt", "")).strip()
+
+_raw_proxy_id = _sub2api.get("proxy_id", None)
+try:
+    parsed_proxy_id = int(_raw_proxy_id) if _raw_proxy_id not in (None, "") else None
+    SUB2API_PROXY_ID = parsed_proxy_id if (parsed_proxy_id is not None and parsed_proxy_id > 0) else None
+except Exception:
+    SUB2API_PROXY_ID = None
+
+_raw_group_ids = _sub2api.get("openai_group_ids", []) or []
+try:
+    SUB2API_OPENAI_GROUP_IDS = [int(x) for x in _raw_group_ids]
+except Exception:
+    SUB2API_OPENAI_GROUP_IDS = []
+
+try:
+    SUB2API_OPENAI_CONCURRENCY = int(_sub2api.get("openai_concurrency", 3) or 3)
+except Exception:
+    SUB2API_OPENAI_CONCURRENCY = 3
+
+try:
+    SUB2API_OPENAI_PRIORITY = int(_sub2api.get("openai_priority", 50) or 50)
+except Exception:
+    SUB2API_OPENAI_PRIORITY = 50
 
 # 账号
 _account = _cfg.get("account", {})

@@ -111,8 +111,7 @@ def get_incomplete_accounts(tracker: dict, team_name: str) -> list:
     if team_name in tracker.get("teams", {}):
         for account in tracker["teams"][team_name]:
             status = account.get("status", "")
-            # 只要不是 crs_added 都算未完成，需要继续处理
-            if status != "crs_added":
+            if status not in ("crs_added", "sub2api_added"):
                 incomplete.append({
                     "email": account["email"],
                     "status": status,
@@ -228,6 +227,8 @@ class Timer:
 
     def stop(self):
         self.end_time = time.time()
+        if self.start_time is None:
+            self.start_time = self.end_time
         duration = self.end_time - self.start_time
         if self.name:
             log.info(f"{self.name} 完成 ({format_duration(duration)})", icon="time")

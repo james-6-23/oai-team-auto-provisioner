@@ -1,18 +1,228 @@
 :root {
+  color-scheme: dark;
+
   --bg: #0b0f14;
   --panel: rgba(255, 255, 255, 0.06);
   --panel-2: rgba(255, 255, 255, 0.08);
   --text: rgba(255, 255, 255, 0.92);
+  --text-2: rgba(255, 255, 255, 0.82);
   --muted: rgba(255, 255, 255, 0.65);
   --border: rgba(255, 255, 255, 0.12);
+  --border-strong: rgba(255, 255, 255, 0.2);
   --shadow: rgba(0, 0, 0, 0.45);
   --primary: #6ea8fe;
   --danger: #ff6b6b;
   --ok: #00d084;
   --warn: #ffb020;
+
+  --primary-border: rgba(110, 168, 254, 0.6);
+  --primary-bg: rgba(110, 168, 254, 0.16);
+  --primary-bg-hover: rgba(110, 168, 254, 0.22);
+  --focus-border: rgba(110, 168, 254, 0.65);
+  --focus-ring: rgba(110, 168, 254, 0.16);
+
+  --danger-border: rgba(255, 107, 107, 0.55);
+  --danger-bg: rgba(255, 107, 107, 0.16);
+  --danger-bg-hover: rgba(255, 107, 107, 0.22);
+
+  --ok-border: rgba(0, 208, 132, 0.65);
+  --ok-bg: rgba(0, 208, 132, 0.14);
+
+  --page-bg: radial-gradient(
+      1100px 760px at 18% 0%,
+      rgba(110, 168, 254, 0.16) 0%,
+      rgba(110, 168, 254, 0) 55%
+    ),
+    radial-gradient(
+      900px 620px at 88% 18%,
+      rgba(0, 208, 132, 0.1) 0%,
+      rgba(0, 208, 132, 0) 60%
+    ),
+    linear-gradient(180deg, #080a0f 0%, var(--bg) 60%, #06080b 100%) fixed;
+
+  --card-bg: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.08),
+    rgba(255, 255, 255, 0.04)
+  );
+  --mode-bg: rgba(0, 0, 0, 0.2);
+  --input-bg: rgba(0, 0, 0, 0.25);
+
+  --btn-bg: rgba(255, 255, 255, 0.06);
+  --btn-bg-hover: rgba(255, 255, 255, 0.1);
+  --btn-ghost-bg: rgba(255, 255, 255, 0.05);
+
+  --pill-bg: rgba(0, 0, 0, 0.2);
+  --main-bg: rgba(255, 255, 255, 0.04);
+
+  --tabs-bg: rgba(0, 0, 0, 0.16);
+  --tab-bg: rgba(255, 255, 255, 0.05);
+
+  --toolbar-bg: rgba(0, 0, 0, 0.12);
+  --editor-title-bg: rgba(0, 0, 0, 0.12);
+  --textarea-bg: rgba(0, 0, 0, 0.18);
+
+  --status-summary-bg: rgba(0, 0, 0, 0.16);
+  --stat-bg: rgba(255, 255, 255, 0.04);
+
+  --team-card-bg: rgba(0, 0, 0, 0.14);
+  --data-panel-bg: rgba(0, 0, 0, 0.14);
+
+  --toast-bg: rgba(10, 14, 32, 0.92);
+
   --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
     "Liberation Mono", "Courier New", monospace, "Segoe UI Emoji",
     "Apple Color Emoji", "Noto Color Emoji";
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    color-scheme: light;
+
+    --bg: #f7f8fa;
+    --panel: rgba(15, 23, 42, 0.04);
+    --panel-2: rgba(15, 23, 42, 0.06);
+    --text: rgba(15, 23, 42, 0.92);
+    --text-2: rgba(15, 23, 42, 0.72);
+    --muted: rgba(15, 23, 42, 0.56);
+    --border: rgba(15, 23, 42, 0.14);
+    --border-strong: rgba(15, 23, 42, 0.18);
+    --shadow: rgba(15, 23, 42, 0.12);
+
+    --primary: #2563eb;
+    --danger: #dc2626;
+    --ok: #16a34a;
+    --warn: #d97706;
+
+    --primary-border: rgba(37, 99, 235, 0.45);
+    --primary-bg: rgba(37, 99, 235, 0.1);
+    --primary-bg-hover: rgba(37, 99, 235, 0.14);
+    --focus-border: rgba(37, 99, 235, 0.55);
+    --focus-ring: rgba(37, 99, 235, 0.14);
+
+    --danger-border: rgba(220, 38, 38, 0.42);
+    --danger-bg: rgba(220, 38, 38, 0.1);
+    --danger-bg-hover: rgba(220, 38, 38, 0.14);
+
+    --ok-border: rgba(22, 163, 74, 0.45);
+    --ok-bg: rgba(22, 163, 74, 0.1);
+
+    --page-bg: radial-gradient(
+        1100px 760px at 18% 0%,
+        rgba(37, 99, 235, 0.18) 0%,
+        rgba(37, 99, 235, 0) 55%
+      ),
+      radial-gradient(
+        900px 620px at 88% 18%,
+        rgba(22, 163, 74, 0.12) 0%,
+        rgba(22, 163, 74, 0) 60%
+      ),
+      linear-gradient(180deg, #ffffff 0%, #f7f8fa 60%, #f3f4f6 100%) fixed;
+
+    --card-bg: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.86),
+      rgba(255, 255, 255, 0.68)
+    );
+    --mode-bg: rgba(255, 255, 255, 0.62);
+    --input-bg: rgba(255, 255, 255, 0.72);
+
+    --btn-bg: rgba(255, 255, 255, 0.66);
+    --btn-bg-hover: rgba(255, 255, 255, 0.82);
+    --btn-ghost-bg: rgba(15, 23, 42, 0.03);
+
+    --pill-bg: rgba(255, 255, 255, 0.62);
+    --main-bg: rgba(255, 255, 255, 0.5);
+
+    --tabs-bg: rgba(255, 255, 255, 0.42);
+    --tab-bg: rgba(15, 23, 42, 0.03);
+
+    --toolbar-bg: rgba(255, 255, 255, 0.42);
+    --editor-title-bg: rgba(255, 255, 255, 0.42);
+    --textarea-bg: rgba(255, 255, 255, 0.72);
+
+    --status-summary-bg: rgba(255, 255, 255, 0.42);
+    --stat-bg: rgba(255, 255, 255, 0.5);
+
+    --team-card-bg: rgba(255, 255, 255, 0.5);
+    --data-panel-bg: rgba(255, 255, 255, 0.5);
+
+    --toast-bg: rgba(255, 255, 255, 0.92);
+  }
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg: #f7f8fa;
+  --panel: rgba(15, 23, 42, 0.04);
+  --panel-2: rgba(15, 23, 42, 0.06);
+  --text: rgba(15, 23, 42, 0.92);
+  --text-2: rgba(15, 23, 42, 0.72);
+  --muted: rgba(15, 23, 42, 0.56);
+  --border: rgba(15, 23, 42, 0.14);
+  --border-strong: rgba(15, 23, 42, 0.18);
+  --shadow: rgba(15, 23, 42, 0.12);
+
+  --primary: #2563eb;
+  --danger: #dc2626;
+  --ok: #16a34a;
+  --warn: #d97706;
+
+  --primary-border: rgba(37, 99, 235, 0.45);
+  --primary-bg: rgba(37, 99, 235, 0.1);
+  --primary-bg-hover: rgba(37, 99, 235, 0.14);
+  --focus-border: rgba(37, 99, 235, 0.55);
+  --focus-ring: rgba(37, 99, 235, 0.14);
+
+  --danger-border: rgba(220, 38, 38, 0.42);
+  --danger-bg: rgba(220, 38, 38, 0.1);
+  --danger-bg-hover: rgba(220, 38, 38, 0.14);
+
+  --ok-border: rgba(22, 163, 74, 0.45);
+  --ok-bg: rgba(22, 163, 74, 0.1);
+
+  --page-bg: radial-gradient(
+      1100px 760px at 18% 0%,
+      rgba(37, 99, 235, 0.18) 0%,
+      rgba(37, 99, 235, 0) 55%
+    ),
+    radial-gradient(
+      900px 620px at 88% 18%,
+      rgba(22, 163, 74, 0.12) 0%,
+      rgba(22, 163, 74, 0) 60%
+    ),
+    linear-gradient(180deg, #ffffff 0%, #f7f8fa 60%, #f3f4f6 100%) fixed;
+
+  --card-bg: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.86),
+    rgba(255, 255, 255, 0.68)
+  );
+  --mode-bg: rgba(255, 255, 255, 0.62);
+  --input-bg: rgba(255, 255, 255, 0.72);
+
+  --btn-bg: rgba(255, 255, 255, 0.66);
+  --btn-bg-hover: rgba(255, 255, 255, 0.82);
+  --btn-ghost-bg: rgba(15, 23, 42, 0.03);
+
+  --pill-bg: rgba(255, 255, 255, 0.62);
+  --main-bg: rgba(255, 255, 255, 0.5);
+
+  --tabs-bg: rgba(255, 255, 255, 0.42);
+  --tab-bg: rgba(15, 23, 42, 0.03);
+
+  --toolbar-bg: rgba(255, 255, 255, 0.42);
+  --editor-title-bg: rgba(255, 255, 255, 0.42);
+  --textarea-bg: rgba(255, 255, 255, 0.72);
+
+  --status-summary-bg: rgba(255, 255, 255, 0.42);
+  --stat-bg: rgba(255, 255, 255, 0.5);
+
+  --team-card-bg: rgba(255, 255, 255, 0.5);
+  --data-panel-bg: rgba(255, 255, 255, 0.5);
+
+  --toast-bg: rgba(255, 255, 255, 0.92);
 }
 
 * {
@@ -27,13 +237,7 @@ body {
 body {
   margin: 0;
   color: var(--text);
-  background: radial-gradient(
-      1100px 760px at 18% 0%,
-      rgba(110, 168, 254, 0.16) 0%,
-      rgba(110, 168, 254, 0) 55%
-    ),
-    radial-gradient(900px 620px at 88% 18%, rgba(0, 208, 132, 0.1) 0%, rgba(0, 208, 132, 0) 60%),
-    linear-gradient(180deg, #080a0f 0%, var(--bg) 60%, #06080b 100%) fixed;
+  background: var(--page-bg);
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto,
     Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
 }
@@ -79,11 +283,7 @@ body {
 }
 
 .card {
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.08),
-    rgba(255, 255, 255, 0.04)
-  );
+  background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: 14px;
   box-shadow: 0 18px 40px var(--shadow);
@@ -94,7 +294,7 @@ body {
   font-size: 13px;
   font-weight: 700;
   margin-bottom: 12px;
-  color: rgba(255, 255, 255, 0.88);
+  color: var(--text);
 }
 
 .field {
@@ -136,13 +336,13 @@ body {
   padding: 10px 10px;
   border-radius: 12px;
   border: 1px solid var(--border);
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--mode-bg);
   transition: background 0.12s ease, border 0.12s ease;
 }
 
 .mode-card input:checked + .mode-content {
-  border-color: rgba(110, 168, 254, 0.6);
-  background: rgba(110, 168, 254, 0.14);
+  border-color: var(--primary-border);
+  background: var(--primary-bg);
 }
 
 .mode-title {
@@ -164,7 +364,7 @@ body {
   padding: 10px 10px;
   border-radius: 10px;
   border: 1px solid var(--border);
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--input-bg);
   color: var(--text);
   outline: none;
 }
@@ -172,8 +372,8 @@ body {
 .input:focus,
 .select:focus,
 textarea:focus {
-  border-color: rgba(110, 168, 254, 0.65);
-  box-shadow: 0 0 0 3px rgba(110, 168, 254, 0.16);
+  border-color: var(--focus-border);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 .btn-row {
@@ -192,7 +392,7 @@ textarea:focus {
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--btn-bg);
   color: var(--text);
   cursor: pointer;
   transition: transform 0.08s ease, background 0.12s ease, border 0.12s ease;
@@ -203,7 +403,7 @@ textarea:focus {
 }
 
 .btn:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--btn-bg-hover);
 }
 
 .btn:disabled {
@@ -216,25 +416,25 @@ textarea:focus {
 }
 
 .btn-primary {
-  border-color: rgba(110, 168, 254, 0.6);
-  background: rgba(110, 168, 254, 0.16);
+  border-color: var(--primary-border);
+  background: var(--primary-bg);
 }
 
 .btn-primary:hover {
-  background: rgba(110, 168, 254, 0.22);
+  background: var(--primary-bg-hover);
 }
 
 .btn-danger {
-  border-color: rgba(255, 107, 107, 0.55);
-  background: rgba(255, 107, 107, 0.16);
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
 }
 
 .btn-danger:hover {
-  background: rgba(255, 107, 107, 0.22);
+  background: var(--danger-bg-hover);
 }
 
 .btn-ghost {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--btn-ghost-bg);
 }
 
 .status {
@@ -251,17 +451,17 @@ textarea:focus {
   border-radius: 999px;
   border: 1px solid var(--border);
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.85);
-  background: rgba(0, 0, 0, 0.2);
+  color: var(--text-2);
+  background: var(--pill-bg);
 }
 
 .pill-idle {
-  border-color: rgba(255, 255, 255, 0.2);
+  border-color: var(--border-strong);
 }
 
 .pill-running {
-  border-color: rgba(0, 208, 132, 0.65);
-  background: rgba(0, 208, 132, 0.14);
+  border-color: var(--ok-border);
+  background: var(--ok-bg);
 }
 
 .hint {
@@ -273,7 +473,7 @@ textarea:focus {
 code {
   font-family: var(--mono);
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--text-2);
 }
 
 .hidden {
@@ -281,7 +481,7 @@ code {
 }
 
 .main {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--main-bg);
   border: 1px solid var(--border);
   border-radius: 14px;
   box-shadow: 0 18px 40px var(--shadow);
@@ -296,21 +496,22 @@ code {
   gap: 8px;
   padding: 12px;
   border-bottom: 1px solid var(--border);
-  background: rgba(0, 0, 0, 0.16);
+  background: var(--tabs-bg);
 }
 
 .tab {
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid transparent;
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.85);
+  background: var(--tab-bg);
+  color: var(--text-2);
   cursor: pointer;
 }
 
 .tab-active {
-  border-color: rgba(110, 168, 254, 0.6);
-  background: rgba(110, 168, 254, 0.16);
+  border-color: var(--primary-border);
+  background: var(--primary-bg);
+  color: var(--text);
 }
 
 .view {
@@ -329,7 +530,7 @@ code {
   align-items: center;
   padding: 10px 12px;
   border-bottom: 1px solid var(--border);
-  background: rgba(0, 0, 0, 0.12);
+  background: var(--toolbar-bg);
 }
 
 .toolbar-left,
@@ -396,7 +597,7 @@ code {
   border-bottom: 1px solid var(--border);
   font-size: 12px;
   color: var(--muted);
-  background: rgba(0, 0, 0, 0.12);
+  background: var(--editor-title-bg);
 }
 
 textarea {
@@ -408,7 +609,7 @@ textarea {
   font-family: var(--mono);
   font-size: 12px;
   color: var(--text);
-  background: rgba(0, 0, 0, 0.18);
+  background: var(--textarea-bg);
 }
 
 .status-body {
@@ -418,7 +619,7 @@ textarea {
 }
 
 .status-summary {
-  background: rgba(0, 0, 0, 0.16);
+  background: var(--status-summary-bg);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 12px;
@@ -438,7 +639,7 @@ textarea {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 10px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--stat-bg);
 }
 
 .stat-k {
@@ -472,7 +673,7 @@ textarea {
 }
 
 .team-card {
-  background: rgba(0, 0, 0, 0.14);
+  background: var(--team-card-bg);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 12px;
@@ -491,7 +692,7 @@ textarea {
 
 .team-meta {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.82);
+  color: var(--text-2);
   white-space: nowrap;
 }
 
@@ -511,10 +712,10 @@ textarea {
   padding: 12px 12px;
   border-radius: 12px;
   border: 1px solid var(--border);
-  background: rgba(10, 14, 32, 0.92);
+  background: var(--toast-bg);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--text);
   white-space: pre-wrap;
 }
 
@@ -542,7 +743,7 @@ textarea {
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: rgba(0, 0, 0, 0.14);
+  background: var(--data-panel-bg);
 }
 
 .data-pre {

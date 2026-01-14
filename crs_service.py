@@ -45,7 +45,7 @@ def build_crs_headers() -> dict:
     }
 
 
-def crs_generate_auth_url() -> tuple[str, str]:
+def crs_generate_auth_url() -> tuple[str | None, str | None]:
     """生成 Codex 授权 URL
 
     Returns:
@@ -77,7 +77,7 @@ def crs_generate_auth_url() -> tuple[str, str]:
         return None, None
 
 
-def crs_exchange_code(code: str, session_id: str) -> dict:
+def crs_exchange_code(code: str, session_id: str) -> dict | None:
     """用授权码换取 tokens
 
     Args:
@@ -112,7 +112,7 @@ def crs_exchange_code(code: str, session_id: str) -> dict:
         return None
 
 
-def crs_add_account(email: str, codex_data: dict) -> dict:
+def crs_add_account(email: str, codex_data: dict) -> dict | None:
     """将账号添加到 CRS 账号池
 
     Args:
@@ -161,7 +161,7 @@ def crs_add_account(email: str, codex_data: dict) -> dict:
         return None
 
 
-def extract_code_from_url(url: str) -> str:
+def extract_code_from_url(url: str) -> str | None:
     """从回调 URL 中提取授权码
 
     Args:

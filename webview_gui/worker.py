@@ -25,6 +25,7 @@ def _应停止(stop_event: threading.Event) -> bool:
 
 def _加载并刷新模块():
     """按当前配置重新加载核心模块，保证 GUI 修改配置后立即生效。"""
+
     import config as config_module
 
     config_module = importlib.reload(config_module)
@@ -93,7 +94,9 @@ def _process_single_team(mods, team: dict, stop_event: threading.Event) -> list[
                 completed_count += 1
 
     if total_in_team >= config.ACCOUNTS_PER_TEAM and completed_count == total_in_team:
-        log.success(f"{team_name} 已完成 {completed_count}/{config.ACCOUNTS_PER_TEAM} 个账号，跳过")
+        log.success(
+            f"{team_name} 已完成 {completed_count}/{config.ACCOUNTS_PER_TEAM} 个账号，跳过"
+        )
         return results
 
     log.header(f"开始处理 {team_name}")
@@ -111,7 +114,10 @@ def _process_single_team(mods, team: dict, stop_event: threading.Event) -> list[
         for acc in incomplete:
             log.step(f"{acc['email']} (状态: {acc['status']})")
         invited_accounts = [
-            {"email": acc["email"], "password": acc.get("password") or config.DEFAULT_PASSWORD}
+            {
+                "email": acc["email"],
+                "password": acc.get("password") or config.DEFAULT_PASSWORD,
+            }
             for acc in incomplete
         ]
         log.info("继续处理未完成账号...", icon="start")
@@ -140,11 +146,15 @@ def _process_single_team(mods, team: dict, stop_event: threading.Event) -> list[
         # 保存追踪记录（带密码）
         for acc in accounts:
             if acc["email"] in invite_result.get("success", []):
-                utils.add_account_with_password(tracker, team_name, acc["email"], acc["password"], "invited")
+                utils.add_account_with_password(
+                    tracker, team_name, acc["email"], acc["password"], "invited"
+                )
         utils.save_team_tracker(tracker)
         log.success("邀请记录已保存")
 
-        invited_accounts = [acc for acc in accounts if acc["email"] in invite_result.get("success", [])]
+        invited_accounts = [
+            acc for acc in accounts if acc["email"] in invite_result.get("success", [])
+        ]
 
     if len(invited_accounts) == 0:
         log.error("没有需要处理的账号")
@@ -164,13 +174,21 @@ def _process_single_team(mods, team: dict, stop_event: threading.Event) -> list[
         log.info(f"处理账号 {i + 1}/{len(invited_accounts)}: {email}", icon="account")
         log.separator("#", 50)
 
-        result = {"team": team_name, "email": email, "password": password, "status": "failed", "crs_id": ""}
+        result = {
+            "team": team_name,
+            "email": email,
+            "password": password,
+            "status": "failed",
+            "crs_id": "",
+        }
 
         utils.update_account_status(tracker, team_name, email, "processing")
         utils.save_team_tracker(tracker)
 
         with utils.Timer(f"账号 {email}"):
-            register_success, codex_data = browser_automation.register_and_authorize(email, password)
+            register_success, codex_data = browser_automation.register_and_authorize(
+                email, password
+            )
 
             if register_success:
                 utils.update_account_status(tracker, team_name, email, "registered")
@@ -187,23 +205,31 @@ def _process_single_team(mods, team: dict, stop_event: threading.Event) -> list[
                         crs_id = crs_result.get("id", "")
                         result["status"] = "success"
                         result["crs_id"] = crs_id
-                        utils.update_account_status(tracker, team_name, email, "crs_added")
+                        utils.update_account_status(
+                            tracker, team_name, email, "crs_added"
+                        )
                         utils.save_team_tracker(tracker)
                         log.success(f"账号处理完成: {email}")
                     else:
                         log.warning("CRS 入库失败，但注册和授权成功")
                         result["status"] = "partial"
-                        utils.update_account_status(tracker, team_name, email, "partial")
+                        utils.update_account_status(
+                            tracker, team_name, email, "partial"
+                        )
                         utils.save_team_tracker(tracker)
                 else:
                     log.warning("Codex 授权失败")
                     result["status"] = "auth_failed"
-                    utils.update_account_status(tracker, team_name, email, "auth_failed")
+                    utils.update_account_status(
+                        tracker, team_name, email, "auth_failed"
+                    )
                     utils.save_team_tracker(tracker)
             else:
                 log.error(f"注册失败: {email}")
                 result["status"] = "register_failed"
-                utils.update_account_status(tracker, team_name, email, "register_failed")
+                utils.update_account_status(
+                    tracker, team_name, email, "register_failed"
+                )
                 utils.save_team_tracker(tracker)
 
         utils.save_to_csv(
@@ -268,7 +294,11 @@ def run_all(stop_event: threading.Event) -> list[dict]:
             all_results.extend(results)
 
             if i < len(config.TEAMS) - 1 and not _应停止(stop_event):
-                log.countdown(3, "等待后处理下一个 Team", check_shutdown=lambda: _应停止(stop_event))
+                log.countdown(
+                    3,
+                    "等待后处理下一个 Team",
+                    check_shutdown=lambda: _应停止(stop_event),
+                )
 
     utils.print_summary(all_results)
     return all_results
@@ -334,7 +364,9 @@ def test_email_only(stop_event: threading.Event) -> None:
     tracker = utils.load_team_tracker()
     for acc in accounts:
         if acc["email"] in result.get("success", []):
-            utils.add_account_with_password(tracker, team_name, acc["email"], acc["password"], "invited")
+            utils.add_account_with_password(
+                tracker, team_name, acc["email"], acc["password"], "invited"
+            )
     utils.save_team_tracker(tracker)
 
     log.success(f"测试完成: {len(result.get('success', []))} 个邀请成功")
@@ -397,18 +429,30 @@ def _检查注册配置(mods, run_dirs: runtime.运行目录, email_source: str)
         raise 任务异常("邮箱来源仅支持 domain 或 gptmail")
 
     if email_source == "domain":
-        if not str(config.EMAIL_API_BASE).strip() or not str(config.EMAIL_API_AUTH).strip():
+        if (
+            not str(config.EMAIL_API_BASE).strip()
+            or not str(config.EMAIL_API_AUTH).strip()
+        ):
             raise 任务异常("域名邮箱模式需要配置 [email].api_base 与 [email].api_auth")
-        has_domain = bool(getattr(config, "EMAIL_DOMAINS", [])) or bool(getattr(config, "EMAIL_DOMAIN", ""))
+        has_domain = bool(getattr(config, "EMAIL_DOMAINS", [])) or bool(
+            getattr(config, "EMAIL_DOMAIN", "")
+        )
         if not has_domain:
             raise 任务异常("域名邮箱模式需要配置 [email].domains 或 [email].domain")
 
     if email_source == "gptmail":
-        if not str(config.GPTMAIL_API_BASE).strip() or not str(config.GPTMAIL_API_KEY).strip():
-            raise 任务异常("随机邮箱(GPTMail)模式需要配置 [email].gptmail_api_base 与 [email].gptmail_api_key")
+        if (
+            not str(config.GPTMAIL_API_BASE).strip()
+            or not str(config.GPTMAIL_API_KEY).strip()
+        ):
+            raise 任务异常(
+                "随机邮箱(GPTMail)模式需要配置 [email].gptmail_api_base 与 [email].gptmail_api_key"
+            )
 
 
-def _创建邮箱列表_for_register(mods, count: int, email_source: str, stop_event: threading.Event) -> list[dict]:
+def _创建邮箱列表_for_register(
+    mods, count: int, email_source: str, stop_event: threading.Event
+) -> list[dict]:
     log = mods["logger"].log
     config = mods["config"]
     email_service = mods["email_service"]
@@ -448,6 +492,7 @@ def _创建邮箱列表_for_register(mods, count: int, email_source: str, stop_e
 
 def _register_openai_only(mods, email: str, password: str) -> bool:
     """只注册 OpenAI 账号，不执行 Codex 授权/CRS 入库。"""
+
     log = mods["logger"].log
     browser_automation = mods["browser_automation"]
 
@@ -478,13 +523,16 @@ def _register_openai_only(mods, email: str, password: str) -> bool:
     return False
 
 
-def batch_register_openai(count: int, email_source: str, stop_event: threading.Event) -> list[dict]:
+def batch_register_openai(
+    count: int, email_source: str, stop_event: threading.Event
+) -> list[dict]:
     """批量注册 OpenAI 账号（仅注册）。
 
-功能：
-- 邮箱来源可选：domain（域名邮箱 / Cloud Mail）或 gptmail（随机邮箱 / GPTMail）
-- 创建的邮箱与密码会保存到程序内部记录（可在 GUI 导出为 CSV）
-"""
+    功能：
+    - 邮箱来源可选：domain（域名邮箱 / Cloud Mail）或 gptmail（随机邮箱 / GPTMail）
+    - 创建的邮箱与密码会保存到程序内部记录（可在 GUI 导出为 CSV）
+    """
+
     run_dirs = runtime.获取运行目录()
     runtime.切换工作目录(run_dirs.工作目录)
 
@@ -494,14 +542,13 @@ def batch_register_openai(count: int, email_source: str, stop_event: threading.E
     log = mods["logger"].log
     email_service = mods["email_service"]
 
-    # 根据选择强制切换验证码获取通道（避免依赖 config.toml 的 use_gptmail）
-    email_service.EMAIL_USE_GPTMAIL = (email_source == "gptmail")
-
     log.header("批量注册 OpenAI（仅注册）")
     log.info(f"注册数量: {count}", icon="account")
     log.info(f"邮箱来源: {email_source}", icon="email")
 
-    accounts = _创建邮箱列表_for_register(mods, count=count, email_source=email_source, stop_event=stop_event)
+    accounts = _创建邮箱列表_for_register(
+        mods, count=count, email_source=email_source, stop_event=stop_event
+    )
     if not accounts:
         log.error("没有成功创建任何邮箱，结束")
         return []
@@ -509,7 +556,9 @@ def batch_register_openai(count: int, email_source: str, stop_event: threading.E
     # 先把凭据全部写入内部存储（保证即使后续注册中断也能找回）
     saved = 0
     for acc in accounts:
-        if internal_output_store.append_created_credential(acc["email"], acc["password"], source=email_source):
+        if internal_output_store.append_created_credential(
+            acc["email"], acc["password"], source=email_source
+        ):
             saved += 1
     log.success(f"已保存凭据到内部记录: {saved}/{len(accounts)}")
 
@@ -536,7 +585,14 @@ def batch_register_openai(count: int, email_source: str, stop_event: threading.E
         else:
             log.error(f"注册失败: {email}")
 
-        results.append({"email": email, "password": password, "status": status, "source": email_source})
+        results.append(
+            {
+                "email": email,
+                "password": password,
+                "status": status,
+                "source": email_source,
+            }
+        )
 
     log.separator("=", 60)
     log.info(f"注册完成: 成功 {success}/{len(results)}")

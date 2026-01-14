@@ -43,7 +43,7 @@
 uv sync
 
 # 或使用 pip
-pip install -r requirements.txt
+python -m pip install -e .
 ```
 
 ### 2. 配置（程序内置，推荐）
@@ -137,13 +137,13 @@ uv run python run.py help
 ```bash
 # 安装依赖（任选其一）
 uv sync
-# 或：pip install -r requirements.txt
+# 或：python -m pip install -e .
 
 # 源码运行
 python -m webview_gui
 
 # 打包为单文件 EXE（Windows）
-powershell -ExecutionPolicy Bypass -File .\\scripts\\build_onefile.ps1
+powershell -ExecutionPolicy Bypass -File .\\webview_gui\\build_onefile.ps1
 ```
 
 - 打包产物：`dist/oai-team-gui.exe`
@@ -169,9 +169,7 @@ oai-team-auto-provisioner/
 │
 ├── 🛠️  utils.py               # 工具函数 (CSV、状态追踪)
 ├── 📊 logger.py              # 日志模块
-├── 🧩 gui_core/              # GUI 后端共享模块（无界面）
-├── 🌐 webview_gui/           # pywebview 图形界面（新版，独立目录）
-├── 🧰 scripts/               # 打包/脚本
+├── 🌐 webview_gui/           # pywebview 图形界面（WebView2）
 │
 ├── 📝 config.toml.example    # 配置模板
 ├── 🔑 team.json.example      # Team 凭证模板

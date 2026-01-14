@@ -6,6 +6,66 @@ function setHidden(el, hidden) {
   el.classList.toggle("hidden", hidden);
 }
 
+const THEME_KEY = "oai-theme";
+
+function getThemeMode() {
+  try {
+    const v = localStorage.getItem(THEME_KEY);
+    if (v === "light" || v === "dark") return v;
+  } catch (_e) {
+    // ignore
+  }
+  return "system";
+}
+
+function persistThemeMode(mode) {
+  try {
+    if (mode === "light" || mode === "dark") {
+      localStorage.setItem(THEME_KEY, mode);
+    } else {
+      localStorage.removeItem(THEME_KEY);
+    }
+  } catch (_e) {
+    // ignore
+  }
+}
+
+function applyThemeMode(mode) {
+  const root = document.documentElement;
+  if (mode === "light") {
+    root.setAttribute("data-theme", "light");
+  } else if (mode === "dark") {
+    root.setAttribute("data-theme", "dark");
+  } else {
+    root.removeAttribute("data-theme");
+  }
+}
+
+function themeLabel(mode) {
+  if (mode === "light") return "亮色";
+  if (mode === "dark") return "深色";
+  return "跟随系统";
+}
+
+function initThemeUI() {
+  const btn = $("btn-theme");
+  if (!btn) return;
+
+  const mode = getThemeMode();
+  applyThemeMode(mode);
+  btn.textContent = `主题：${themeLabel(mode)}`;
+
+  btn.addEventListener("click", () => {
+    const current = getThemeMode();
+    const next =
+      current === "system" ? "dark" : current === "dark" ? "light" : "system";
+    persistThemeMode(next);
+    applyThemeMode(next);
+    btn.textContent = `主题：${themeLabel(next)}`;
+    toast(`主题已切换为：${themeLabel(next)}`, 1200);
+  });
+}
+
 function toast(msg, ms = 2600) {
   const el = $("toast");
   el.textContent = msg;
@@ -403,6 +463,7 @@ function wireUi(paths) {
     .forEach((el) => el.addEventListener("change", updateModeExtras));
   updateModeExtras();
   setRunningUI(false);
+  initThemeUI();
 
   $("tab-logs").addEventListener("click", () => switchTab("logs"));
   $("tab-config").addEventListener("click", () => switchTab("config"));

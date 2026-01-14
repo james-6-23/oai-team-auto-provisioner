@@ -16,10 +16,21 @@ import signal
 import sys
 import atexit
 
-from config import TEAMS, ACCOUNTS_PER_TEAM, DEFAULT_PASSWORD
+from config import (
+    TEAMS,
+    ACCOUNTS_PER_TEAM,
+    DEFAULT_PASSWORD,
+    USE_SUB2API,
+    CRS_API_BASE,
+    CRS_ADMIN_TOKEN,
+    SUB2API_API_BASE,
+    SUB2API_ADMIN_API_KEY,
+    SUB2API_ADMIN_JWT,
+)
 from email_service import batch_create_emails
 from team_service import batch_invite_to_team, print_team_summary
-from crs_service import crs_add_account
+from crs_service import crs_add_account, crs_check_account_exists
+from sub2api_service import sub2api_create_openai_account_from_oauth, sub2api_find_openai_oauth_account
 from browser_automation import register_and_authorize
 from utils import (
     save_to_csv,
@@ -75,6 +86,27 @@ signal.signal(signal.SIGTERM, _signal_handler)
 atexit.register(_save_state)
 
 
+def _validate_sink_config_or_exit() -> None:
+    if USE_SUB2API:
+        if not SUB2API_API_BASE:
+            log.error("配置缺失: [sub2api].api_base")
+            sys.exit(2)
+        if not SUB2API_ADMIN_API_KEY and not SUB2API_ADMIN_JWT:
+            log.error("配置缺失: [sub2api].admin_api_key 或 [sub2api].admin_jwt")
+            sys.exit(2)
+        return
+
+    if not CRS_API_BASE:
+        log.error("配置缺失: [crs].api_base")
+        sys.exit(2)
+    if not CRS_ADMIN_TOKEN:
+        log.error("配置缺失: [crs].admin_token")
+        sys.exit(2)
+
+
+_validate_sink_config_or_exit()
+
+
 def process_single_team(team: dict) -> list:
     """处理单个 Team 的完整流程
 
@@ -97,7 +129,7 @@ def process_single_team(team: dict) -> list:
     total_in_team = len(_tracker.get("teams", {}).get(team_name, []))
     if team_name in _tracker.get("teams", {}):
         for acc in _tracker["teams"][team_name]:
-            if acc.get("status") == "crs_added":
+            if acc.get("status") in ("crs_added", "sub2api_added"):
                 completed_count += 1
 
     # 如果已完成所有账号，快速跳过
@@ -192,34 +224,82 @@ def process_single_team(team: dict) -> list:
 
         with Timer(f"账号 {email}"):
             # 注册 + Codex 授权
-            register_success, codex_data = register_and_authorize(email, password)
+            register_success, auth_result = register_and_authorize(email, password)
 
             if register_success:
                 update_account_status(_tracker, team_name, email, "registered")
                 save_team_tracker(_tracker)
 
-                if codex_data:
+                if auth_result and isinstance(auth_result, dict):
                     update_account_status(_tracker, team_name, email, "authorized")
                     save_team_tracker(_tracker)
 
-                    # 添加到 CRS
-                    log.step("添加到 CRS...")
-                    crs_result = crs_add_account(email, codex_data)
+                    if USE_SUB2API:
+                        session_id = str(auth_result.get("session_id", "")).strip()
+                        code = str(auth_result.get("code", "")).strip()
 
-                    if crs_result:
-                        crs_id = crs_result.get("id", "")
-                        result["status"] = "success"
-                        result["crs_id"] = crs_id
+                        if not session_id or not code:
+                            log.warning("Codex 授权结果缺少 session_id/code")
+                            result["status"] = "auth_failed"
+                            update_account_status(_tracker, team_name, email, "auth_failed")
+                            save_team_tracker(_tracker)
+                        else:
+                            existing = sub2api_find_openai_oauth_account(email)
+                            if existing:
+                                account_id = existing.get("id", "")
+                                result["status"] = "success"
+                                result["crs_id"] = str(account_id) if account_id is not None else ""
 
-                        update_account_status(_tracker, team_name, email, "crs_added")
-                        save_team_tracker(_tracker)
+                                update_account_status(_tracker, team_name, email, "sub2api_added")
+                                save_team_tracker(_tracker)
 
-                        log.success(f"账号处理完成: {email}")
+                                log.success(f"账号已存在于 Sub2API: {email}")
+                            else:
+                                log.step("添加到 Sub2API...")
+                                sub2api_result = sub2api_create_openai_account_from_oauth(
+                                    code=code,
+                                    session_id=session_id,
+                                    email=email,
+                                )
+
+                                if sub2api_result:
+                                    account_id = sub2api_result.get("id", "")
+                                    result["status"] = "success"
+                                    result["crs_id"] = str(account_id) if account_id is not None else ""
+
+                                    update_account_status(_tracker, team_name, email, "sub2api_added")
+                                    save_team_tracker(_tracker)
+
+                                    log.success(f"账号处理完成: {email}")
+                                else:
+                                    log.warning("Sub2API 入库失败，但注册和授权成功")
+                                    result["status"] = "partial"
+                                    update_account_status(_tracker, team_name, email, "partial")
+                                    save_team_tracker(_tracker)
                     else:
-                        log.warning("CRS 入库失败，但注册和授权成功")
-                        result["status"] = "partial"
-                        update_account_status(_tracker, team_name, email, "partial")
-                        save_team_tracker(_tracker)
+                        if crs_check_account_exists(email):
+                            result["status"] = "success"
+                            update_account_status(_tracker, team_name, email, "crs_added")
+                            save_team_tracker(_tracker)
+                            log.success(f"账号已存在于 CRS: {email}")
+                        else:
+                            log.step("添加到 CRS...")
+                            crs_result = crs_add_account(email, auth_result)
+
+                            if crs_result:
+                                crs_id = crs_result.get("id", "")
+                                result["status"] = "success"
+                                result["crs_id"] = str(crs_id) if crs_id is not None else ""
+
+                                update_account_status(_tracker, team_name, email, "crs_added")
+                                save_team_tracker(_tracker)
+
+                                log.success(f"账号处理完成: {email}")
+                            else:
+                                log.warning("CRS 入库失败，但注册和授权成功")
+                                result["status"] = "partial"
+                                update_account_status(_tracker, team_name, email, "partial")
+                                save_team_tracker(_tracker)
                 else:
                     log.warning("Codex 授权失败")
                     result["status"] = "auth_failed"
@@ -373,7 +453,7 @@ def show_status():
             status = acc.get("status", "unknown")
             status_count[status] = status_count.get(status, 0) + 1
 
-            if status == "crs_added":
+            if status in ("crs_added", "sub2api_added"):
                 total_completed += 1
                 log.success(f"{acc['email']} ({status})")
             elif status in ["invited", "registered", "authorized", "processing"]:

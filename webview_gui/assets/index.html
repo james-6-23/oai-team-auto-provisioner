@@ -4,6 +4,18 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>OAI Team Auto Provisioner</title>
+    <script>
+      (() => {
+        try {
+          const v = localStorage.getItem("oai-theme");
+          if (v === "light" || v === "dark") {
+            document.documentElement.setAttribute("data-theme", v);
+          }
+        } catch (_) {
+          // ignore
+        }
+      })();
+    </script>
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
@@ -14,6 +26,9 @@
       </div>
       <div class="status">
         <span id="status-pill" class="pill pill-idle">空闲</span>
+        <button id="btn-theme" class="btn btn-ghost" type="button">
+          主题：跟随系统
+        </button>
         <button id="btn-open-workdir" class="btn btn-ghost" type="button">
           打开目录
         </button>
