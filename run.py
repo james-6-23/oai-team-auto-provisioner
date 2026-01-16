@@ -789,6 +789,7 @@ if __name__ == "__main__":
         # 再处理已有 token 的 Team
         if ready_teams and not _shutdown_requested:
             run_all_teams()
-        
-        if _current_results:
+        elif _current_results:
+            # 只有当 run_all_teams() 没有执行时才单独打印摘要
+            # 因为 run_all_teams() 内部已经调用了 print_summary
             print_summary(_current_results)
