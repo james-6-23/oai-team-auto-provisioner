@@ -198,7 +198,7 @@ def step_dismiss_popups(page, max_attempts: int = 3) -> bool:
 
     元素: <div class="flex items-center justify-center">跳过</div>
     """
-    log.step("步骤 1-2: 检查初始弹窗...")
+    log.step("步骤 1: 检查初始弹窗...")
     _log_current_url(page, "弹窗检测")
     handled = False
 
@@ -227,7 +227,7 @@ def step_dismiss_popups(page, max_attempts: int = 3) -> bool:
 
 def step_skip_tour(page) -> bool:
     """步骤 3: 跳过导览"""
-    log.step("步骤 3: 跳过导览...")
+    log.step("步骤 2: 查找跳过导览按钮...")
     _log_current_url(page, "导览页面")
     time.sleep(2)
 
@@ -245,27 +245,64 @@ def step_skip_tour(page) -> bool:
 
 def step_click_continue(page) -> bool:
     """步骤 4: 点击继续"""
-    log.step("步骤 4: 点击继续...")
+    log.step("步骤 3: 点击继续...")
     _log_current_url(page, "继续按钮页面")
 
-    # 重试 3 次
-    for attempt in range(3):
-        # 优先文本匹配
-        if _wait_and_click(page, "text:继续", timeout=5, required=False):
-            log.success("  已点击继续")
-            return True
+    last_url = None
+    for attempt in range(12):
+        try:
+            current_url = page.url
+            if last_url != current_url:
+                last_url = current_url
+        except Exception:
+            current_url = ""
 
-        if _wait_and_click(page, "text:Continue", timeout=3, required=False):
-            log.success("  已点击继续")
-            return True
+        btn = None
+        try:
+            btn = page.ele("css:button.btn.btn-primary.btn-large.w-full", timeout=1)
+        except Exception:
+            btn = None
 
-        # 备选：btn-primary
-        if _wait_and_click(page, "css:button.btn-primary", timeout=3, required=False):
-            log.success("  已点击继续")
-            return True
+        if not btn:
+            try:
+                btn = page.ele("css:button.btn-primary.btn-large.w-full", timeout=1)
+            except Exception:
+                btn = None
 
-        if attempt < 2:
-            log.info(f"  重试 ({attempt + 1}/3)...")
+        if not btn:
+            try:
+                btn = page.ele("css:button.btn-primary.btn-large", timeout=1)
+            except Exception:
+                btn = None
+
+        if btn and btn.states.is_displayed and btn.states.is_enabled:
+            try:
+                btn_text = (btn.text or "").strip().lower()
+                if ("继续" in btn_text) or ("continue" in btn_text):
+                    _human_delay()
+                    btn.click()
+                    log.success("  已点击继续")
+                    time.sleep(1)
+                    return True
+            except Exception:
+                pass
+
+        try:
+            buttons = page.eles("css:button.btn-primary")
+            for b in buttons:
+                if b.states.is_displayed and b.states.is_enabled:
+                    t = (b.text or "").strip().lower()
+                    if ("继续" in t) or ("continue" in t):
+                        _human_delay()
+                        b.click()
+                        log.success("  已点击继续")
+                        time.sleep(1)
+                        return True
+        except Exception:
+            pass
+
+        if attempt < 11:
+            log.info(f"  重试 ({attempt + 1}/12)...")
             time.sleep(1)
 
     log.warning("  未找到继续按钮")
@@ -273,31 +310,41 @@ def step_click_continue(page) -> bool:
 
 
 def step_select_free_gift(page) -> bool:
-    """步骤 5: 选择免费赠品
+    """步骤 5: 选择免费赠品"""
+    log.step("步骤 4: 选择免费赠品...")
+    _log_current_url(page, "免费赠品页面")
 
-    元素: <button type="button" class="flex items-center gap-1 bg-transparent...">
-            <svg>...</svg>免费赠品
-          </button>
+    for attempt in range(5):
+        if _wait_and_click(page, "text:免费赠品", timeout=3, required=False):
+            log.success("  已选择免费赠品 (text)")
+            return True
 
-    Args:
-        page: 浏览器页面实例
+        if _wait_and_click(page, "text:Free gift", timeout=2, required=False):
+            log.success("  已选择免费赠品 (Free gift)")
+            return True
 
-    Returns:
-        bool: 是否成功
-    """
-    log.step("选择免费赠品...")
+        try:
+            buttons = page.eles("css:button")
+            for btn in buttons:
+                if btn.states.is_displayed and btn.states.is_enabled:
+                    btn_text = btn.text.strip().lower()
+                    if "免费" in btn_text or "free" in btn_text or "赠品" in btn_text or "gift" in btn_text:
+                        _human_delay()
+                        btn.click()
+                        log.success(f"  已选择免费赠品 (按钮遍历: {btn_text[:20]})")
+                        return True
+        except Exception:
+            pass
 
-    # 方法1: 文本匹配
-    if _wait_and_click(page, "text:免费赠品", timeout=STEP_TIMEOUT, required=False):
-        log.success("已选择免费赠品")
-        return True
+        if _wait_and_click(page, "css:button.bg-transparent", timeout=2, required=False):
+            log.success("  已选择免费赠品 (bg-transparent)")
+            return True
 
-    # 方法2: 英文
-    if _wait_and_click(page, "text:Free gift", timeout=5, required=False):
-        log.success("已选择免费赠品")
-        return True
+        if attempt < 4:
+            log.info(f"  重试 ({attempt + 1}/5)...")
+            time.sleep(1.5)
 
-    log.warning("未找到免费赠品选项")
+    log.warning("  未找到免费赠品选项")
     return False
 
 
@@ -473,16 +520,7 @@ def step_fill_checkout_form(page) -> bool:
 
     _human_delay()
 
-    # 4. 填写地址
-    # 6. 选择国家 (#billingCountry)
-    log.info("  选择国家...")
-    try:
-        country_select = page.ele("css:#billingCountry")
-        if country_select:
-            country_select.select(data["country"])
-            log.success("  国家已选择")
-    except Exception:
-        log.warning("  选择国家失败")
+    log.info("  跳过国家选择(使用默认值)...")
 
     _human_delay()
 

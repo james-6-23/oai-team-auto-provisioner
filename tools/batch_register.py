@@ -8,6 +8,8 @@ import sys
 import time
 import random
 import os
+import socket
+from urllib.parse import urlparse
 from pathlib import Path
 
 # 修复 Windows 控制台乱码
@@ -23,12 +25,59 @@ from browser_automation import init_browser
 from config import DEFAULT_PASSWORD
 from logger import log
 from tools.onboarding_flow import run_onboarding_flow
-import sys
-import os
 
-# 修复 Windows 控制台乱码
-if sys.platform == "win32":
-    os.system("chcp 65001 > nul")
+
+def _preflight_cloudmail() -> bool:
+    if os.environ.get("BATCH_REGISTER_SKIP_PREFLIGHT") == "1":
+        return True
+    try:
+        import config
+
+        if getattr(config, "EMAIL_PROVIDER", "cloudmail") != "cloudmail":
+            return True
+
+        base = getattr(config, "EMAIL_API_BASE", "")
+        if not base:
+            return True
+
+        parsed = urlparse(base)
+        host = parsed.hostname
+        if not host:
+            return True
+
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+        timeout_cfg = getattr(config, "REQUEST_TIMEOUT", 30)
+        try:
+            timeout = min(5, int(timeout_cfg))
+        except Exception:
+            timeout = 5
+
+        addrs = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+        last_err = None
+        for family, socktype, proto, _, sockaddr in addrs:
+            sock = None
+            try:
+                sock = socket.socket(family, socktype, proto)
+                sock.settimeout(timeout)
+                sock.connect(sockaddr)
+                return True
+            except Exception as e:
+                last_err = e
+            finally:
+                if sock:
+                    try:
+                        sock.close()
+                    except Exception:
+                        pass
+
+        log.error(f"CloudMail API 连接失败: {host}:{port} ({last_err})")
+        log.info("Linux 如需代理请设置 HTTP_PROXY/HTTPS_PROXY，或在 config.toml 切换为 gptmail")
+        log.info("如确认网络可用，可设置 BATCH_REGISTER_SKIP_PREFLIGHT=1 跳过预检")
+        return False
+
+    except Exception as e:
+        log.warning(f"预检异常: {e}")
+        return True
 
 
 def register_openai_account(page, email: str, password: str) -> bool:
@@ -113,12 +162,6 @@ def register_and_keep_open(email: str, password: str) -> tuple[bool, dict]:
             pass
 
 
-from email_service import batch_create_emails
-from browser_automation import register_openai_account, browser_context_with_retry
-from config import DEFAULT_PASSWORD
-from logger import log
-
-
 def batch_create_and_register(count: int = 4, start_delay: int = 0):
     """批量创建邮箱并注册
 
@@ -138,6 +181,9 @@ def batch_create_and_register(count: int = 4, start_delay: int = 0):
 
     # ========== 阶段 1: 批量创建邮箱 ==========
     log.section(f"阶段 1: 批量创建 {count} 个邮箱")
+
+    if not _preflight_cloudmail():
+        return
 
     accounts = batch_create_emails(count)
 
@@ -259,26 +305,55 @@ def print_usage():
     log.info("  python tools/batch_register.py register 4")
     log.info("  python tools/batch_register.py register 4 10")
 
+if __name__ == "__main__":
+    try:
+
+        from DrissionPage import ChromiumOptions
+
+        original_init = ChromiumOptions.__init__
+
+        def patched_init(self, read_file=True, ini_path=None):
+            if ini_path is None:
+                original_init(self, read_file=read_file)
+            else:
+                original_init(self, read_file=read_file, ini_path=ini_path)
+            
+            self.set_argument('--headless=new')
+            self.set_argument('--no-sandbox')
+            self.set_argument('--disable-gpu')
+            self.set_argument('--disable-dev-shm-usage')
+
+        ChromiumOptions.__init__ = patched_init
+        log.info("已应用 Linux 无头模式补丁")
+
+    except Exception as e:
+        log.warning(f"应用 Linux 补丁失败: {e}")
+
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print_usage()
-        sys.exit(1)
+    try:
+        if len(sys.argv) < 2:
+            print_usage()
+            sys.exit(1)
 
-    command = sys.argv[1]
+        command = sys.argv[1]
 
-    if command == "create":
-        # 仅创建邮箱
-        count = int(sys.argv[2]) if len(sys.argv) > 2 else 4
-        batch_create_only(count)
+        if command == "create":
+            # 仅创建邮箱
+            count = int(sys.argv[2]) if len(sys.argv) > 2 else 4
+            batch_create_only(count)
 
-    elif command == "register":
-        # 创建 + 注册
-        count = int(sys.argv[2]) if len(sys.argv) > 2 else 4
-        delay = int(sys.argv[3]) if len(sys.argv) > 3 else 0
-        batch_create_and_register(count, delay)
+        elif command == "register":
+            # 创建 + 注册
+            count = int(sys.argv[2]) if len(sys.argv) > 2 else 4
+            delay = int(sys.argv[3]) if len(sys.argv) > 3 else 0
+            batch_create_and_register(count, delay)
 
-    else:
-        log.error(f"未知命令: {command}")
-        print_usage()
-        sys.exit(1)
+        else:
+            log.error(f"未知命令: {command}")
+            print_usage()
+            sys.exit(1)
+
+    except KeyboardInterrupt:
+        log.warning("用户中断")
+        sys.exit(130)
