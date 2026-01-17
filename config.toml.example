@@ -2,11 +2,16 @@
 # 复制此文件为 config.toml 并填入你的配置
 # 本配置文件用于管理 OpenAI Team 账号批量注册系统的各项参数
 
+# ==================== 代理配置 (顶级配置) ====================
+# 重要: proxy_enabled 必须放在所有 [section] 之前，否则会被解析到错误的 section
+# 是否启用代理 (默认关闭)
+proxy_enabled = false
+
 # ==================== 邮箱服务配置 ====================
 # 邮箱系统选择:
 #   - "cloudmail": Cloud Mail 自建邮箱系统，需要先创建用户才能收信
 #   - "gptmail": GPTMail 临时邮箱系统，无需创建用户，直接生成即可收信
-email_provider = "cloudmail"
+email_provider = "gptmail"
 
 # ---------- Cloud Mail 邮箱系统配置 ----------
 # 仅当 email_provider = "cloudmail" 时生效
@@ -34,8 +39,57 @@ api_base = "https://mail.chatgpt.org.uk"
 api_key = "gpt-test"
 # 邮箱前缀 (留空则自动生成 {8位随机字符}-oaiteam 格式)
 prefix = ""
-# 可用域名列表，生成邮箱时随机选择 (留空使用默认域名)
-domains = []
+# 可用域名列表，生成邮箱时随机选择
+# 这些域名已配置 MX 记录指向 GPTMail 服务器
+# 下面域名是可用的
+domains = [
+    "29thnewport.org.uk", "2ndwhartonscoutgroup.org.uk",
+    "abrahampath.org.uk", "aiccministry.com",
+    "amyfalconer.co.uk", "aylshamrotary.club",
+    "birdsedgevillagehall.co.uk", "bodyofchristministries.co.uk", "bp-hall.co.uk",
+    "brendansbridge.org.uk", "caye.org.uk", "cccnoahsark.com",
+    "christchurchsouthend.org.uk",
+    "cockertonmethodist.org.uk",
+    "dormerhouseschool.co.uk", "e-quiparts.org.uk",
+    "educationossett.co.uk", "egremonttrust.org.uk",
+    "f4jobseekers.org.uk", "flushingvillageclub.org.uk",
+    "fordslane.org.uk", "friendsofkms.org.uk", "gadshillplace.com",
+    "goleudy.org.uk", "gospelassembly.org.uk", "gospelgeneration.org.uk",
+    "gracesanctuary-rccg.co.uk", "greyhoundwalks.org.uk",
+    "haslemerecfr.org.uk", "hottchurch.org.uk",
+    "hvcrc.org", "ingrambreamishvalley.co.uk", "iqraacademy.org.uk",
+    "kempsonplayers.org", "lbatrust.co.uk", "leicscoopband.co.uk",
+    "lflct.org.uk", "living-water.org.uk", "lovecambodia.co.uk", "lutonsymphony.com",
+    "macclesfieldmvc.org.uk",
+    "mtdalmshouse.fitness", "musicatleamingtonhastings.co.uk", "neuaddowen.org.uk",
+    "newlifedorking.org.uk", "newlifefellowshipuk.com",
+    "ngbotima.com", "northboveymeadow.business", "ocgm.org.uk",
+    "oughtibridgechapel.org.uk",
+    "pontfest.org.uk",
+    "powysbarnowls.com", "ppedu.pp.ua", "rawdhah.academy",
+    "resthavencare.org.uk", "rhalmshouse.church", "rhydwilym.com", "riyo.org.uk",
+    "rmtcweb.co.uk", "sanity-uk.org", "sawley-scouts.org.uk",
+    "sidneymichaelpoland.travel", "skmet.co.uk", "steptogetherdance.org.uk",
+    "stmichaelsflixton.co.uk", "svmc.org.uk", "tasmforvictory.com",
+    "tatendatrust.org.uk", "thestuartfeakinstrust.com", "thewonderbus.org",
+    "thurleighchurchestate.church", "tlcappealeastkent.co.uk",
+    "trees-surrey.org.uk", "vision15.co.uk", "vpachurch.org", "westraintonjubileehall.org.uk",
+    "weymouthdramaclub.co.uk", "wohbc.org.uk",
+    "wsmptfa.org.uk", "wyldegreenurc.org.uk", "xxmailedu.dpdns.org", "yetga.co.uk",
+    "zawauk.org", "zumuntahassociationuk.org"
+]
+
+# ==================== 授权服务选择 ====================
+# 选择使用的授权服务: "crs" / "cpa" / "s2a"
+#   - crs: 原有 CRS 系统，需手动添加账号到 CRS
+#   - cpa: CPA (Codex/Copilot Authorization) 系统，后台自动处理账号
+#   - s2a: Sub2API 系统，支持 OAuth 授权和账号入库
+auth_provider = "cpa"
+
+# 是否将 team.json 中的 Team Owner 也添加到授权服务
+# 开启后，运行时会自动将 team.json 中的 Owner 账号也进行授权入库
+# 注意: 请确保 Team Owner 邮箱可以接收验证码
+include_team_owners = false
 
 # ==================== CRS 服务配置 ====================
 # CRS (Central Registration Service) 用于管理注册账号的中心服务
@@ -44,11 +98,40 @@ domains = []
 api_base = "https://your-crs-service.com"
 # 管理员令牌，用于调用 CRS 管理接口
 admin_token = "your-admin-token"
-# 是否将 team.json 中的 Team 管理员账号也添加到 CRS
-# 开启后，运行时会自动将 team.json 中的账号同步到 CRS 账号池
-# Team Owner 会使用一次性验证码 (OTP) 登录进行 Codex 授权
-# 注意: 请确保 Team 管理员账号邮箱可以接收验证码
-include_team_owners = false
+
+# ==================== CPA 服务配置 ====================
+# CPA (Codex/Copilot Authorization) 用于 Copilot 授权服务
+# 仅当 auth_provider = "cpa" 时生效
+[cpa]
+# CPA API 接口地址
+api_base = "http://your-cpa-service:8317"
+# 管理面板密码 (注意: 是密码，不是 token)
+admin_password = "your-admin-password"
+# 授权状态轮询间隔 (秒)
+poll_interval = 2
+# 授权状态轮询最大次数
+poll_max_retries = 30
+# 是否使用 WebUI 模式 (推荐保持 true)
+is_webui = true
+
+# ==================== S2A (Sub2API) 服务配置 ====================
+# Sub2API 用于 OpenAI OAuth 授权和账号入库
+# 仅当 auth_provider = "s2a" 时生效
+[s2a]
+# S2A API 接口地址
+api_base = "https://your-sub2api-service.com/api/v1"
+# Admin API Key (推荐，从系统设置中生成，永久有效)
+admin_key = ""
+# JWT Token (备选，从登录接口获取，有过期时间)
+admin_token = ""
+# 账号并发数
+concurrency = 5
+# 账号优先级
+priority = 50
+# 分组 ID 列表 (留空使用默认分组)
+group_ids = []
+# 分组名称列表 (优先使用 group_ids，如果未配置则通过名称查询 ID)
+group_names = []
 
 # ==================== 账号配置 ====================
 [account]
@@ -90,21 +173,27 @@ max_retries = 20
 wait_timeout = 60
 # 短等待时间，用于快速检查 (秒)
 short_wait = 10
+# 无头模式 (服务器运行时设为 true)
+headless = false
 
-# ==================== 代理配置 ====================
-# 是否启用代理 (默认关闭)
-proxy_enabled = false
+# ==================== 文件配置 ====================
+[files]
+# 导出账号信息的 CSV 文件路径
+csv_file = "accounts.csv"
+# Team 注册进度追踪文件路径
+tracker_file = "team_tracker.json"
 
+# ==================== 代理列表配置 (放在文件末尾) ====================
 # 支持配置多个代理，程序会轮换使用
-# type: 代理类型 (socks5/http/https)
+# type: 代理类型 (http/https，注意: DrissionPage 不支持 socks5)
 # host: 代理服务器地址
 # port: 代理端口
 # username/password: 代理认证信息 (可选)
 
 # [[proxies]]
-# type = "socks5"
+# type = "http"
 # host = "127.0.0.1"
-# port = 1080
+# port = 7890
 # username = ""
 # password = ""
 
@@ -114,10 +203,3 @@ proxy_enabled = false
 # port = 8080
 # username = "user"
 # password = "pass"
-
-# ==================== 文件配置 ====================
-[files]
-# 导出账号信息的 CSV 文件路径
-csv_file = "accounts.csv"
-# Team 注册进度追踪文件路径
-tracker_file = "team_tracker.json"

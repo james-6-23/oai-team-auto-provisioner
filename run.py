@@ -17,13 +17,16 @@ import sys
 import atexit
 
 from config import (
-    TEAMS, ACCOUNTS_PER_TEAM, DEFAULT_PASSWORD,
-    add_domain_to_blacklist, get_domain_from_email, is_email_blacklisted
+    TEAMS, ACCOUNTS_PER_TEAM, DEFAULT_PASSWORD, AUTH_PROVIDER,
+    add_domain_to_blacklist, get_domain_from_email, is_email_blacklisted,
+    save_team_json, get_next_proxy
 )
 from email_service import batch_create_emails, unified_create_email
-from team_service import batch_invite_to_team, print_team_summary, check_available_seats, invite_single_to_team
-from crs_service import crs_add_account, crs_sync_team_owners, add_team_owners_to_tracker
-from browser_automation import register_and_authorize, login_and_authorize_with_otp, authorize_only
+from team_service import batch_invite_to_team, print_team_summary, check_available_seats, invite_single_to_team, preload_all_account_ids
+from crs_service import crs_add_account, crs_sync_team_owners, crs_verify_token
+from cpa_service import cpa_verify_connection
+from s2a_service import s2a_verify_connection
+from browser_automation import register_and_authorize, login_and_authorize_with_otp, authorize_only, login_and_authorize_team_owner
 from utils import (
     save_to_csv,
     load_team_tracker,
@@ -34,7 +37,8 @@ from utils import (
     get_incomplete_accounts,
     get_all_incomplete_accounts,
     print_summary,
-    Timer
+    Timer,
+    add_team_owners_to_tracker
 )
 from logger import log
 
@@ -79,14 +83,14 @@ signal.signal(signal.SIGTERM, _signal_handler)
 atexit.register(_save_state)
 
 
-def process_single_team(team: dict) -> list:
+def process_single_team(team: dict) -> tuple[list, list]:
     """处理单个 Team 的完整流程
 
     Args:
         team: Team 配置
 
     Returns:
-        list: 处理结果列表
+        tuple: (处理结果列表, 待处理的 Owner 列表)
     """
     global _tracker, _current_results, _shutdown_requested
 
@@ -99,11 +103,11 @@ def process_single_team(team: dict) -> list:
 
     # 分离 Owner 和普通成员
     all_accounts = _tracker.get("teams", {}).get(team_name, [])
-    owner_accounts = [acc for acc in all_accounts if acc.get("role") == "owner" and acc.get("status") != "crs_added"]
+    owner_accounts = [acc for acc in all_accounts if acc.get("role") == "owner" and acc.get("status") != "completed"]
     member_accounts = [acc for acc in all_accounts if acc.get("role") != "owner"]
     
     # 统计完成数量 (只统计普通成员)
-    completed_count = sum(1 for acc in member_accounts if acc.get("status") == "crs_added")
+    completed_count = sum(1 for acc in member_accounts if acc.get("status") == "completed")
     member_count = len(member_accounts)
 
     # 如果普通成员已完成目标数量，且没有未完成的 Owner，跳过
@@ -111,7 +115,7 @@ def process_single_team(team: dict) -> list:
     if member_count >= ACCOUNTS_PER_TEAM and completed_count == member_count and owner_incomplete == 0:
         print_team_summary(team)
         log.success(f"{team_name} 已完成 {completed_count}/{ACCOUNTS_PER_TEAM} 个成员账号，跳过")
-        return results
+        return results, []
 
     # 有未完成的才打印详细信息
     log.header(f"开始处理 {team_name}")
@@ -127,7 +131,7 @@ def process_single_team(team: dict) -> list:
     log.info(f"Team 可用席位: {available_seats}")
 
     # ========== 检查未完成的普通成员账号 ==========
-    incomplete_members = [acc for acc in member_accounts if acc.get("status") != "crs_added"]
+    incomplete_members = [acc for acc in member_accounts if acc.get("status") != "completed"]
     
     invited_accounts = []
 
@@ -279,27 +283,55 @@ def process_accounts(accounts: list, team_name: str) -> list:
             "crs_id": ""
         }
 
-        # 检查是否是 Team Owner (需要 OTP 登录)
-        is_team_owner = role == "owner" or account.get("status") == "team_owner"
-
         # 检查账号状态，决定处理流程
         account_status = account.get("status", "")
-        # 已注册但未授权的状态
-        need_auth_only = account_status in ["registered", "authorized", "auth_failed", "partial"]
+        account_role = account.get("role", "member")
+
+        # 已完成的账号跳过
+        if account_status == "completed":
+            log.info(f"账号已完成，跳过: {email}")
+            continue
+
+        # Team Owner 需要 OTP 登录 (仅限旧格式，状态为 team_owner)
+        is_team_owner_otp = account_status == "team_owner"
+
+        # 已授权但未入库的状态 (直接尝试入库，不重新授权)
+        # - authorized: 授权成功但入库失败
+        # - partial: 部分完成
+        need_crs_only = account_status in ["authorized", "partial"]
+
+        # 已注册但未授权的状态 (使用密码登录授权)
+        # - registered: 已注册，需要授权
+        # - auth_failed: 授权失败，重试
+        # - 新格式 Owner (role=owner 且状态不是 team_owner/completed) 也走密码登录
+        need_auth_only = (
+            account_status in ["registered", "auth_failed"]
+            or (account_role == "owner" and account_status not in ["team_owner", "completed", "authorized", "partial"])
+        )
 
         # 标记为处理中
         update_account_status(_tracker, team_name, email, "processing")
         save_team_tracker(_tracker)
 
         with Timer(f"账号 {email}"):
-            if is_team_owner:
-                # Team Owner: 使用 OTP 登录授权
-                log.info("Team Owner 账号，使用一次性验证码登录...", icon="auth")
+            if is_team_owner_otp:
+                # 旧格式 Team Owner: 使用 OTP 登录授权
+                log.info("Team Owner 账号 (旧格式)，使用一次性验证码登录...", icon="auth")
                 auth_success, codex_data = login_and_authorize_with_otp(email)
                 register_success = auth_success
+            elif need_crs_only:
+                # 已授权但未入库: 跳过授权，直接尝试入库
+                log.info(f"已授权账号 (状态: {account_status})，跳过授权，直接入库...", icon="auth")
+                register_success = True
+                codex_data = None  # CPA/S2A 模式不需要 codex_data
+                # CRS 模式下，由于没有 codex_data，无法入库，需要重新授权
+                if AUTH_PROVIDER not in ("cpa", "s2a"):
+                    log.warning("CRS 模式下已授权账号缺少 codex_data，需要重新授权")
+                    auth_success, codex_data = authorize_only(email, password)
+                    register_success = auth_success
             elif need_auth_only:
-                # 已注册账号: 直接进行 Codex 授权
-                log.info(f"已注册账号 (状态: {account_status})，直接进行 Codex 授权...", icon="auth")
+                # 已注册账号 (包括新格式 Owner): 使用密码登录授权
+                log.info(f"已注册账号 (状态: {account_status}, 角色: {account_role})，使用密码登录授权...", icon="auth")
                 auth_success, codex_data = authorize_only(email, password)
                 register_success = True
             else:
@@ -336,38 +368,55 @@ def process_accounts(accounts: list, team_name: str) -> list:
                 update_account_status(_tracker, team_name, email, "registered")
                 save_team_tracker(_tracker)
 
-                if codex_data:
+                # CPA 模式: codex_data 为 None，授权成功后直接标记完成
+                # CRS 模式: 需要 codex_data，手动添加到 CRS
+                if AUTH_PROVIDER in ("cpa", "s2a"):
+                    # CPA/S2A 模式: 授权成功即完成 (后台自动处理账号)
+                    # codex_data 为 None 表示授权成功
                     update_account_status(_tracker, team_name, email, "authorized")
                     save_team_tracker(_tracker)
 
-                    # 添加到 CRS
-                    log.step("添加到 CRS...")
-                    crs_result = crs_add_account(email, codex_data)
+                    result["status"] = "success"
+                    result["crs_id"] = f"{AUTH_PROVIDER.upper()}-AUTO"  # 标记为自动处理
 
-                    if crs_result:
-                        crs_id = crs_result.get("id", "")
-                        result["status"] = "success"
-                        result["crs_id"] = crs_id
-
-                        update_account_status(_tracker, team_name, email, "crs_added")
-                        save_team_tracker(_tracker)
-
-                        log.success(f"账号处理完成: {email}")
-                    else:
-                        log.warning("CRS 入库失败，但注册和授权成功")
-                        result["status"] = "partial"
-                        update_account_status(_tracker, team_name, email, "partial")
-                        save_team_tracker(_tracker)
-                else:
-                    log.warning("Codex 授权失败")
-                    result["status"] = "auth_failed"
-                    update_account_status(_tracker, team_name, email, "auth_failed")
+                    update_account_status(_tracker, team_name, email, "completed")
                     save_team_tracker(_tracker)
+
+                    log.success(f"{AUTH_PROVIDER.upper()} 账号处理完成: {email}")
+                else:
+                    # CRS 模式: 原有逻辑
+                    if codex_data:
+                        update_account_status(_tracker, team_name, email, "authorized")
+                        save_team_tracker(_tracker)
+
+                        # 添加到 CRS
+                        log.step("添加到 CRS...")
+                        crs_result = crs_add_account(email, codex_data)
+
+                        if crs_result:
+                            crs_id = crs_result.get("id", "")
+                            result["status"] = "success"
+                            result["crs_id"] = crs_id
+
+                            update_account_status(_tracker, team_name, email, "completed")
+                            save_team_tracker(_tracker)
+
+                            log.success(f"账号处理完成: {email}")
+                        else:
+                            log.warning("CRS 入库失败，但注册和授权成功")
+                            result["status"] = "partial"
+                            update_account_status(_tracker, team_name, email, "partial")
+                            save_team_tracker(_tracker)
+                    else:
+                        log.warning("Codex 授权失败")
+                        result["status"] = "auth_failed"
+                        update_account_status(_tracker, team_name, email, "auth_failed")
+                        save_team_tracker(_tracker)
             elif register_success != "domain_blacklisted":
-                if is_team_owner:
+                if is_team_owner_otp:
                     log.error(f"OTP 登录授权失败: {email}")
                 else:
-                    log.error(f"注册失败: {email}")
+                    log.error(f"注册/授权失败: {email}")
                 update_account_status(_tracker, team_name, email, "register_failed")
                 save_team_tracker(_tracker)
 
@@ -385,7 +434,7 @@ def process_accounts(accounts: list, team_name: str) -> list:
 
         # 账号之间的间隔
         if i < len(accounts) - 1 and not _shutdown_requested:
-            wait_time = random.randint(5, 15)
+            wait_time = random.randint(3, 6)
             log.info(f"等待 {wait_time}s 后处理下一个账号...", icon="wait")
             time.sleep(wait_time)
 
@@ -422,7 +471,8 @@ def run_all_teams():
                 break
 
             log.separator("★", 60)
-            log.info(f"Team {i + 1}/{len(TEAMS)}: {team['name']}", icon="team")
+            team_email = team.get('account') or team.get('owner_email', '')
+            log.highlight(f"Team {i + 1}/{len(TEAMS)}: {team['name']} ({team_email})", icon="team")
             log.separator("★", 60)
 
             results, pending_owners = process_single_team(team)
@@ -565,7 +615,7 @@ def show_status():
             status = acc.get("status", "unknown")
             status_count[status] = status_count.get(status, 0) + 1
 
-            if status == "crs_added":
+            if status == "completed":
                 total_completed += 1
                 log.success(f"{acc['email']} ({status})")
             elif status in ["invited", "registered", "authorized", "processing"]:
@@ -584,33 +634,162 @@ def show_status():
     log.info(f"最后更新: {tracker.get('last_updated', 'N/A')}", icon="time")
 
 
-if __name__ == "__main__":
-    # 启动时将 Team Owner 添加到 tracker (如果配置开启)
-    # 这样 Team Owner 会走正常的 Codex 授权流程
+def process_team_with_login(team: dict, team_index: int, total: int):
+    """处理单个 Team（包括获取 token、授权和后续流程）
+    
+    用于格式3的 Team，登录时同时完成授权
+    """
+    global _tracker
+    
+    log.separator("★", 60)
+    log.highlight(f"Team {team_index + 1}/{total}: {team['name']} ({team['owner_email']})", icon="team")
+    log.separator("★", 60)
+    
+    # 1. 登录并授权
+    log.info("登录并授权 Owner...", icon="auth")
+    proxy = get_next_proxy()
+    result = login_and_authorize_team_owner(
+        team["owner_email"],
+        team["owner_password"],
+        proxy
+    )
+    
+    owner_result = None  # Owner 的处理结果
+    
+    if result.get("token"):
+        team["auth_token"] = result["token"]
+    if result.get("account_id"):
+        team["account_id"] = result["account_id"]
+    if result.get("authorized"):
+        team["authorized"] = True
+    
+    # 立即保存
+    save_team_json()
+    
+    if not result.get("token"):
+        log.error(f"登录失败，跳过此 Team")
+        return []
+    
+    team["needs_login"] = False
+    
+    if result.get("authorized"):
+        log.success(f"Owner 登录并授权成功")
+        # 记录 Owner 授权成功的结果
+        owner_result = {
+            "email": team["owner_email"],
+            "team": team["name"],
+            "status": "success",
+            "role": "owner"
+        }
+    else:
+        log.warning(f"Owner 登录成功但授权失败，后续可重试")
+    
+    # 2. 添加 Owner 到 tracker (状态根据 authorized 决定)
     _tracker = load_team_tracker()
     add_team_owners_to_tracker(_tracker, DEFAULT_PASSWORD)
     save_team_tracker(_tracker)
+    
+    # 3. 处理该 Team 的成员
+    results, pending_owners = process_single_team(team)
+    
+    # 4. 如果 Owner 授权失败，在这里重试
+    if pending_owners:
+        for owner in pending_owners:
+            # 只处理未授权的 Owner
+            if owner.get("status") != "authorized":
+                owner_data = {
+                    "email": owner["email"],
+                    "password": owner.get("password", DEFAULT_PASSWORD),
+                    "status": owner.get("status", "registered"),
+                    "role": "owner"
+                }
+                owner_results = process_accounts([owner_data], team["name"])
+                results.extend(owner_results)
+    
+    # 添加 Owner 结果到返回列表
+    if owner_result:
+        results.insert(0, owner_result)
+    
+    return results
+
+
+if __name__ == "__main__":
+    # ========== 启动前置检查 ==========
+    # 1. 根据配置选择验证对应的授权服务
+    if AUTH_PROVIDER == "cpa":
+        log.info("授权服务: CPA", icon="auth")
+        is_valid, message = cpa_verify_connection()
+        if is_valid:
+            log.success(f"CPA {message}")
+        else:
+            log.error(f"CPA 验证失败: {message}")
+            sys.exit(1)
+    elif AUTH_PROVIDER == "s2a":
+        log.info("授权服务: S2A (Sub2API)", icon="auth")
+        is_valid, message = s2a_verify_connection()
+        if is_valid:
+            log.success(f"S2A {message}")
+        else:
+            log.error(f"S2A 验证失败: {message}")
+            sys.exit(1)
+    else:
+        log.info("授权服务: CRS", icon="auth")
+        is_valid, message = crs_verify_token()
+        if is_valid:
+            log.success(f"CRS {message}")
+        else:
+            log.error(f"CRS Token 验证失败: {message}")
+            sys.exit(1)
+
+    # 2. 分离需要登录和不需要登录的 Team
+    needs_login_teams = [t for t in TEAMS if t.get("format") == "new" and t.get("needs_login")]
+    ready_teams = [t for t in TEAMS if not (t.get("format") == "new" and t.get("needs_login"))]
+
+    # 3. 只对已有 token 的 Team 预加载 account_id 和添加到 tracker
+    if ready_teams:
+        success_count, fail_count = preload_all_account_ids()
+        _tracker = load_team_tracker()
+        add_team_owners_to_tracker(_tracker, DEFAULT_PASSWORD)
+        save_team_tracker(_tracker)
 
     if len(sys.argv) > 1:
         arg = sys.argv[1]
 
         if arg == "test":
-            # 测试模式
             test_email_only()
         elif arg == "single":
-            # 单 Team 模式
             team_idx = int(sys.argv[2]) if len(sys.argv) > 2 else 0
             run_single_team(team_idx)
         elif arg == "status":
-            # 显示状态
             show_status()
         else:
             log.error(f"未知参数: {arg}")
-            log.info("用法:")
-            log.info("python run.py          # 运行 (自动恢复未完成账号)")
-            log.info("python run.py single 0 # 只运行第 1 个 Team")
-            log.info("python run.py status   # 查看当前状态")
-            log.info("python run.py test     # 测试模式 (仅邮箱+邀请)")
+            log.info("用法: python run.py [test|single N|status]")
     else:
-        # 默认运行所有 Team
-        run_all_teams()
+        # 默认运行
+        _current_results = []
+        
+        # 先处理需要登录的 Team（获取 token 后立即处理）
+        if needs_login_teams:
+            log.separator("=", 60)
+            log.info(f"处理缺少 Token 的 Team ({len(needs_login_teams)} 个)")
+            log.separator("=", 60)
+            
+            for i, team in enumerate(needs_login_teams):
+                if _shutdown_requested:
+                    break
+                results = process_team_with_login(team, i, len(needs_login_teams))
+                _current_results.extend(results)
+                
+                if i < len(needs_login_teams) - 1 and not _shutdown_requested:
+                    wait_time = random.randint(3, 8)
+                    log.info(f"等待 {wait_time}s...", icon="wait")
+                    time.sleep(wait_time)
+        
+        # 再处理已有 token 的 Team
+        if ready_teams and not _shutdown_requested:
+            run_all_teams()
+        elif _current_results:
+            # 只有当 run_all_teams() 没有执行时才单独打印摘要
+            # 因为 run_all_teams() 内部已经调用了 print_summary
+            print_summary(_current_results)

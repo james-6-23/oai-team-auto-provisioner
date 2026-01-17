@@ -33,6 +33,7 @@ class ColoredFormatter(logging.Formatter):
     }
     RESET = "\033[0m"
     GREEN = "\033[92m"  # 用于 success
+    BLUE = "\033[94m"   # 用于 highlight
 
     def format(self, record):
         # 自定义 level 颜色
@@ -41,6 +42,10 @@ class ColoredFormatter(logging.Formatter):
         # 处理自定义的 success level
         if hasattr(record, 'is_success') and record.is_success:
             color = self.GREEN
+
+        # 处理自定义的 highlight level (蓝色)
+        if hasattr(record, 'is_highlight') and record.is_highlight:
+            color = self.BLUE
 
         # 格式化时间
         timestamp = datetime.fromtimestamp(record.created).strftime("%H:%M:%S")
@@ -167,6 +172,12 @@ class Logger:
         """成功日志"""
         prefix = "  " * indent
         extra = {'icon': self._get_icon("success"), 'is_success': True}
+        self._logger.info(f"{prefix}{msg}", extra=extra)
+
+    def highlight(self, msg: str, icon: str = None, indent: int = 0):
+        """高亮日志 (蓝色)"""
+        prefix = "  " * indent
+        extra = {'icon': self._get_icon(icon), 'is_highlight': True}
         self._logger.info(f"{prefix}{msg}", extra=extra)
 
     def warning(self, msg: str, indent: int = 0):

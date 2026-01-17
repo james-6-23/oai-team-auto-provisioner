@@ -12,7 +12,15 @@ from logger import log
 
 
 def save_to_csv(email: str, password: str, team_name: str = "", status: str = "success", crs_id: str = ""):
-    """保存账号信息到 CSV 文件"""
+    """保存账号信息到 CSV 文件
+
+    Args:
+        email: 邮箱地址
+        password: 密码
+        team_name: Team 名称
+        status: 状态 (success/failed)
+        crs_id: CRS 账号 ID
+    """
     file_exists = os.path.exists(CSV_FILE)
 
     with open(CSV_FILE, 'a', newline='', encoding='utf-8') as f:
@@ -34,7 +42,11 @@ def save_to_csv(email: str, password: str, team_name: str = "", status: str = "s
 
 
 def load_team_tracker() -> dict:
-    """加载 Team 追踪记录"""
+    """加载 Team 追踪记录
+
+    Returns:
+        dict: {"teams": {"team_name": [{"email": "...", "status": "..."}]}}
+    """
     if os.path.exists(TEAM_TRACKER_FILE):
         try:
             with open(TEAM_TRACKER_FILE, 'r', encoding='utf-8') as f:
@@ -57,16 +69,25 @@ def save_team_tracker(tracker: dict):
 
 
 def add_account_to_tracker(tracker: dict, team_name: str, email: str, status: str = "invited"):
-    """添加账号到追踪记录"""
+    """添加账号到追踪记录
+
+    Args:
+        tracker: 追踪记录
+        team_name: Team 名称
+        email: 邮箱地址
+        status: 状态 (invited/registered/authorized/completed)
+    """
     if team_name not in tracker["teams"]:
         tracker["teams"][team_name] = []
 
+    # 检查是否已存在
     for account in tracker["teams"][team_name]:
         if account["email"] == email:
             account["status"] = status
             account["updated_at"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             return
 
+    # 添加新记录
     tracker["teams"][team_name].append({
         "email": email,
         "status": status,
@@ -86,7 +107,16 @@ def update_account_status(tracker: dict, team_name: str, email: str, status: str
 
 
 def remove_account_from_tracker(tracker: dict, team_name: str, email: str) -> bool:
-    """从 tracker 中移除账号"""
+    """从 tracker 中移除账号
+    
+    Args:
+        tracker: 追踪记录
+        team_name: Team 名称
+        email: 邮箱地址
+        
+    Returns:
+        bool: 是否成功移除
+    """
     if team_name in tracker["teams"]:
         original_len = len(tracker["teams"][team_name])
         tracker["teams"][team_name] = [
@@ -105,23 +135,36 @@ def get_team_account_count(tracker: dict, team_name: str) -> int:
 
 
 def get_incomplete_accounts(tracker: dict, team_name: str) -> list:
-    """获取未完成的账号列表 (非 crs_added 状态)"""
+    """获取未完成的账号列表 (非 completed 状态)
+
+    Args:
+        tracker: 追踪记录
+        team_name: Team 名称
+
+    Returns:
+        list: [{"email": "...", "status": "...", "password": "...", "role": "..."}]
+    """
     incomplete = []
     if team_name in tracker.get("teams", {}):
         for account in tracker["teams"][team_name]:
             status = account.get("status", "")
-            if status != "crs_added":
+            # 只要不是 completed 都算未完成，需要继续处理
+            if status != "completed":
                 incomplete.append({
                     "email": account["email"],
                     "status": status,
                     "password": account.get("password", ""),
-                    "role": account.get("role", "member")
+                    "role": account.get("role", "member")  # 包含角色信息
                 })
     return incomplete
 
 
 def get_all_incomplete_accounts(tracker: dict) -> dict:
-    """获取所有 Team 的未完成账号"""
+    """获取所有 Team 的未完成账号
+
+    Returns:
+        dict: {"team_name": [{"email": "...", "status": "..."}]}
+    """
     result = {}
     for team_name in tracker.get("teams", {}):
         incomplete = get_incomplete_accounts(tracker, team_name)
@@ -135,6 +178,7 @@ def add_account_with_password(tracker: dict, team_name: str, email: str, passwor
     if team_name not in tracker["teams"]:
         tracker["teams"][team_name] = []
 
+    # 检查是否已存在
     for account in tracker["teams"][team_name]:
         if account["email"] == email:
             account["status"] = status
@@ -142,18 +186,23 @@ def add_account_with_password(tracker: dict, team_name: str, email: str, passwor
             account["updated_at"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             return
 
+    # 添加新记录
     tracker["teams"][team_name].append({
         "email": email,
         "password": password,
         "status": status,
-        "role": "member",
+        "role": "member",  # 角色: owner 或 member
         "created_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         "updated_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     })
 
 
 def print_summary(results: list):
-    """打印执行摘要"""
+    """打印执行摘要
+
+    Args:
+        results: [{"team": "...", "email": "...", "status": "...", "crs_id": "..."}]
+    """
     log.separator("=", 60)
     log.header("执行摘要")
     log.separator("=", 60)
@@ -165,6 +214,7 @@ def print_summary(results: list):
     log.success(f"成功: {success_count}")
     log.error(f"失败: {failed_count}")
 
+    # 按 Team 分组
     teams = {}
     for r in results:
         team = r.get("team", "Unknown")
@@ -228,3 +278,86 @@ class Timer:
 
     def __exit__(self, *args):
         self.stop()
+
+
+def add_team_owners_to_tracker(tracker: dict, password: str) -> int:
+    """将 team.json 中的 Team Owner 添加到 tracker，走授权流程
+
+    只添加有 token 的 Team Owner，没有 token 的跳过（格式3会在登录时单独处理）
+
+    Args:
+        tracker: team_tracker 数据
+        password: 默认账号密码 (旧格式使用)
+
+    Returns:
+        int: 添加的数量
+    """
+    from config import INCLUDE_TEAM_OWNERS, TEAMS
+
+    if not INCLUDE_TEAM_OWNERS:
+        return 0
+
+    if not TEAMS:
+        return 0
+
+    added_count = 0
+    for team in TEAMS:
+        # 跳过没有 token 的 Team（格式3会在登录时单独处理）
+        if not team.get("auth_token"):
+            continue
+
+        team_name = team.get("name", "")
+        team_format = team.get("format", "old")
+
+        # 获取邮箱
+        email = team.get("owner_email", "")
+        if not email:
+            raw_data = team.get("raw", {})
+            email = raw_data.get("user", {}).get("email", "")
+
+        # 获取密码
+        owner_password = team.get("owner_password", "") or password
+
+        if not team_name or not email:
+            continue
+
+        # 检查是否已在 tracker 中
+        existing = False
+        if team_name in tracker.get("teams", {}):
+            for acc in tracker["teams"][team_name]:
+                if acc.get("email") == email:
+                    existing = True
+                    break
+
+        if not existing:
+            # 添加到 tracker
+            if team_name not in tracker["teams"]:
+                tracker["teams"][team_name] = []
+
+            # 根据格式和授权状态决定 tracker 状态
+            # - 新格式且已授权: 状态为 completed (跳过)
+            # - 新格式未授权: 状态为 registered (需要授权)
+            # - 旧格式: 使用 OTP 登录授权，状态为 team_owner
+            if team_format == "new":
+                if team.get("authorized"):
+                    status = "completed"  # 已授权，跳过
+                else:
+                    status = "registered"  # 需要授权
+            else:
+                status = "team_owner"  # 旧格式，使用 OTP 登录授权
+
+            tracker["teams"][team_name].append({
+                "email": email,
+                "password": owner_password,
+                "status": status,
+                "role": "owner",
+                "created_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                "updated_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            })
+            log.info(f"Team Owner 添加到 tracker: {email} -> {team_name} (格式: {team_format}, 状态: {status})")
+            added_count += 1
+
+    if added_count > 0:
+        log.info(f"已添加 {added_count} 个 Team Owner 到 tracker", icon="sync")
+
+    return added_count

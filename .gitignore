@@ -18,6 +18,7 @@ accounts.csv
 created_credentials.csv
 team.json
 team_tracker.json
+domain_blacklist.json
 exports/
 oai-team-gui-log-*.txt
 
@@ -27,7 +28,6 @@ logs/
 
 # Temporary outputs (often contain tokens)
 tools/register_results*.txt
-
 
 # IDE
 .idea/
@@ -44,3 +44,4 @@ tools/register_results*.txt
 Thumbs.db
 nul
 
+.claude/settings.local.json

@@ -112,21 +112,109 @@ def _load_teams() -> list:
 _cfg = _load_toml()
 _raw_teams = _load_teams()
 
+
+def _parse_team_config(t: dict, index: int) -> dict:
+    """解析单个 Team 配置，支持多种格式
+    
+    格式1 (旧格式):
+    {
+        "user": {"email": "xxx@xxx.com"},
+        "account": {"id": "...", "organizationId": "..."},
+        "accessToken": "..."
+    }
+    
+    格式2/3 (新格式):
+    {
+        "account": "xxx@xxx.com",  # 邮箱
+        "password": "...",         # 密码
+        "token": "...",            # accessToken (格式3无此字段)
+        "authorized": true         # 是否已授权 (格式3授权后添加)
+    }
+    """
+    # 检测格式类型
+    if isinstance(t.get("account"), str):
+        # 新格式: account 是邮箱字符串
+        email = t.get("account", "")
+        name = email.split("@")[0] if "@" in email else f"Team{index+1}"
+        token = t.get("token", "")
+        authorized = t.get("authorized", False)
+        cached_account_id = t.get("account_id", "")
+
+        return {
+            "name": name,
+            "account_id": cached_account_id,
+            "org_id": "",
+            "auth_token": token,
+            "owner_email": email,
+            "owner_password": t.get("password", ""),
+            "needs_login": not token,  # 无 token 需要登录
+            "authorized": authorized,   # 是否已授权
+            "format": "new",
+            "raw": t
+        }
+    else:
+        # 旧格式: account 是对象
+        email = t.get("user", {}).get("email", f"Team{index+1}")
+        name = email.split("@")[0] if "@" in email else f"Team{index+1}"
+        return {
+            "name": name,
+            "account_id": t.get("account", {}).get("id", ""),
+            "org_id": t.get("account", {}).get("organizationId", ""),
+            "auth_token": t.get("accessToken", ""),
+            "owner_email": email,
+            "owner_password": "",
+            "format": "old",
+            "raw": t
+        }
+
+
 # 转换 team.json 格式为 team_service.py 期望的格式
 TEAMS = []
 for i, t in enumerate(_raw_teams):
-    TEAMS.append({
-        "name": t.get("user", {}).get("email", f"Team{i+1}").split("@")[0],
-        "account_id": t.get("account", {}).get("id", ""),
-        "org_id": t.get("account", {}).get("organizationId", ""),
-        "auth_token": t.get("accessToken", ""),
-        "raw": t  # 保留原始数据
-    })
+    team_config = _parse_team_config(t, i)
+    TEAMS.append(team_config)
+
+
+def save_team_json():
+    """保存 team.json (用于持久化 account_id、token、authorized 等动态获取的数据)
+
+    仅对新格式的 Team 配置生效
+    """
+    if not TEAM_JSON_FILE.exists():
+        return False
+
+    updated = False
+    for team in TEAMS:
+        if team.get("format") == "new":
+            raw = team.get("raw", {})
+            # 保存 account_id
+            if team.get("account_id") and raw.get("account_id") != team["account_id"]:
+                raw["account_id"] = team["account_id"]
+                updated = True
+            # 保存 token
+            if team.get("auth_token") and raw.get("token") != team["auth_token"]:
+                raw["token"] = team["auth_token"]
+                updated = True
+            # 保存 authorized 状态
+            if team.get("authorized") and not raw.get("authorized"):
+                raw["authorized"] = True
+                updated = True
+
+    if not updated:
+        return False
+
+    try:
+        with open(TEAM_JSON_FILE, "w", encoding="utf-8") as f:
+            json.dump(_raw_teams, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        _log_config("ERROR", "team.json", "保存失败", str(e))
+        return False
 
 # 邮箱系统选择
-EMAIL_PROVIDER = _cfg.get("email_provider", "cloudmail")  # "cloudmail" 或 "gptmail"
+EMAIL_PROVIDER = _cfg.get("email_provider", "kyx")  # "kyx" 或 "gptmail"
 
-# Cloud Mail 邮箱系统
+# 原有邮箱系统 (KYX)
 _email = _cfg.get("email", {})
 EMAIL_API_BASE = _email.get("api_base", "")
 EMAIL_API_AUTH = _email.get("api_auth", "")
@@ -141,6 +229,14 @@ GPTMAIL_API_BASE = _gptmail.get("api_base", "https://mail.chatgpt.org.uk")
 GPTMAIL_API_KEY = _gptmail.get("api_key", "gpt-test")
 GPTMAIL_PREFIX = _gptmail.get("prefix", "")
 GPTMAIL_DOMAINS = _gptmail.get("domains", [])
+
+
+def get_random_gptmail_domain() -> str:
+    """随机获取一个 GPTMail 可用域名 (排除黑名单)"""
+    available = [d for d in GPTMAIL_DOMAINS if d not in _domain_blacklist]
+    if available:
+        return random.choice(available)
+    return ""
 
 
 # ==================== 域名黑名单管理 ====================
@@ -200,20 +296,35 @@ def is_email_blacklisted(email: str) -> bool:
 # 启动时加载黑名单
 _domain_blacklist = _load_blacklist()
 
+# 授权服务选择: "crs" 或 "cpa"
+# 注意: auth_provider 可能在顶层或被误放在 gptmail section 下
+AUTH_PROVIDER = _cfg.get("auth_provider") or _cfg.get("gptmail", {}).get("auth_provider", "crs")
 
-def get_random_gptmail_domain() -> str:
-    """随机获取一个 GPTMail 可用域名 (排除黑名单)"""
-    available = [d for d in GPTMAIL_DOMAINS if d not in _domain_blacklist]
-    if available:
-        return random.choice(available)
-    return ""
-
+# 是否将 Team Owner 也添加到授权服务
+INCLUDE_TEAM_OWNERS = _cfg.get("include_team_owners", False)
 
 # CRS
 _crs = _cfg.get("crs", {})
 CRS_API_BASE = _crs.get("api_base", "")
 CRS_ADMIN_TOKEN = _crs.get("admin_token", "")
-CRS_INCLUDE_TEAM_OWNERS = _crs.get("include_team_owners", False)
+
+# CPA
+_cpa = _cfg.get("cpa", {})
+CPA_API_BASE = _cpa.get("api_base", "")
+CPA_ADMIN_PASSWORD = _cpa.get("admin_password", "")
+CPA_POLL_INTERVAL = _cpa.get("poll_interval", 2)
+CPA_POLL_MAX_RETRIES = _cpa.get("poll_max_retries", 30)
+CPA_IS_WEBUI = _cpa.get("is_webui", True)
+
+# S2A (Sub2API)
+_s2a = _cfg.get("s2a", {})
+S2A_API_BASE = _s2a.get("api_base", "")
+S2A_ADMIN_KEY = _s2a.get("admin_key", "")
+S2A_ADMIN_TOKEN = _s2a.get("admin_token", "")
+S2A_CONCURRENCY = _s2a.get("concurrency", 10)
+S2A_PRIORITY = _s2a.get("priority", 50)
+S2A_GROUP_NAMES = _s2a.get("group_names", [])
+S2A_GROUP_IDS = _s2a.get("group_ids", [])
 
 # 账号
 _account = _cfg.get("account", {})
@@ -248,6 +359,7 @@ VERIFICATION_CODE_MAX_RETRIES = _ver.get("max_retries", 20)
 _browser = _cfg.get("browser", {})
 BROWSER_WAIT_TIMEOUT = _browser.get("wait_timeout", 60)
 BROWSER_SHORT_WAIT = _browser.get("short_wait", 10)
+BROWSER_HEADLESS = _browser.get("headless", False)
 
 # 文件
 _files = _cfg.get("files", {})
@@ -255,7 +367,8 @@ CSV_FILE = _files.get("csv_file", str(BASE_DIR / "accounts.csv"))
 TEAM_TRACKER_FILE = _files.get("tracker_file", str(BASE_DIR / "team_tracker.json"))
 
 # 代理
-PROXIES = _cfg.get("proxies", [])
+PROXY_ENABLED = _cfg.get("proxy_enabled", False)
+PROXIES = _cfg.get("proxies", []) if PROXY_ENABLED else []
 _proxy_index = 0
 
 
@@ -289,6 +402,30 @@ def format_proxy_url(proxy: dict) -> str:
     if user and pwd:
         return f"{p_type}://{user}:{pwd}@{host}:{port}"
     return f"{p_type}://{host}:{port}"
+
+
+def get_proxy_dict() -> dict:
+    """获取 requests 库使用的代理字典格式
+
+    Returns:
+        dict: {"http": "http://...", "https": "http://..."} 或 None
+    """
+    if not PROXY_ENABLED or not PROXIES:
+        return None
+
+    proxy = get_next_proxy()
+    if not proxy:
+        return None
+
+    proxy_url = format_proxy_url(proxy)
+    if not proxy_url:
+        return None
+
+    # requests 库的代理格式
+    return {
+        "http": proxy_url,
+        "https": proxy_url
+    }
 
 
 # ==================== 随机姓名列表 ====================

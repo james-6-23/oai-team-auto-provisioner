@@ -1,6 +1,7 @@
 [
   {
-    "_comment": "通过 https://chatgpt.com/api/auth/session 获取授权信息，登录 ChatGPT 后访问此链接",
+    "_comment": "格式1 (旧格式): 通过 https://chatgpt.com/api/auth/session 获取授权信息",
+    "_comment2": "登录 ChatGPT Team 账号后访问此链接获取完整的 session 信息",
     "user": {
       "id": "user-xxxxxxxxxxxxxxxxxxxxxxxx",
       "email": "your-email@example.com",
@@ -20,5 +21,20 @@
     },
     "accessToken": "eyJhbGciOiJSUzI1NiIs...(your access token)",
     "authProvider": "openai"
+  },
+  {
+    "_comment": "格式2 (新格式-有Token): 简化配置，只需邮箱、密码和Token",
+    "_comment2": "适用于已有 accessToken 的情况",
+    "account": "team-owner@example.com",
+    "password": "YourPassword@2025",
+    "token": "eyJhbGciOiJSUzI1NiIs...(your access token)",
+    "authorized": false,
+    "account_id": ""
+  },
+  {
+    "_comment": "格式3 (新格式-无Token): 只需邮箱和密码，程序会自动登录获取Token",
+    "_comment2": "适用于没有 accessToken 的情况，程序启动时会自动登录",
+    "account": "team-owner2@example.com",
+    "password": "YourPassword@2025"
   }
 ]
