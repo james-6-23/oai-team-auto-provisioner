@@ -28,6 +28,7 @@ from cpa_service import (
     cpa_poll_auth_status,
     is_cpa_callback_url
 )
+from s2a_service import s2a_generate_auth_url, s2a_create_account_from_oauth
 from logger import log
 
 
@@ -1174,7 +1175,10 @@ def perform_codex_authorization(page, email: str, password: str) -> dict:
     log.info(f"开始 Codex 授权: {email}", icon="code")
 
     # 生成授权 URL
-    auth_url, session_id = crs_generate_auth_url()
+    if AUTH_PROVIDER == "s2a":
+        auth_url, session_id = s2a_generate_auth_url()
+    else:
+        auth_url, session_id = crs_generate_auth_url()
     if not auth_url or not session_id:
         log.error("无法获取授权 URL")
         return None
@@ -1374,6 +1378,17 @@ def perform_codex_authorization(page, email: str, password: str) -> dict:
         log.error("无法获取授权码")
         return None
 
+    # S2A 模式: 直接调用 s2a_create_account_from_oauth 入库
+    if AUTH_PROVIDER == "s2a":
+        log.step("S2A 入库...")
+        s2a_result = s2a_create_account_from_oauth(code=code, session_id=session_id, name=email)
+        if s2a_result:
+            log.success("S2A Codex 授权成功")
+            return s2a_result
+        else:
+            log.error("S2A 入库失败")
+            return None
+
     # 交换 tokens
     log.step("交换 tokens...")
     codex_data = crs_exchange_code(code, session_id)
@@ -1399,7 +1414,10 @@ def perform_codex_authorization_with_otp(page, email: str) -> dict:
     log.info("开始 Codex 授权 (OTP 登录)...", icon="auth")
 
     # 生成授权 URL
-    auth_url, session_id = crs_generate_auth_url()
+    if AUTH_PROVIDER == "s2a":
+        auth_url, session_id = s2a_generate_auth_url()
+    else:
+        auth_url, session_id = crs_generate_auth_url()
     if not auth_url or not session_id:
         log.error("无法获取授权 URL")
         return None
@@ -1645,6 +1663,17 @@ def perform_codex_authorization_with_otp(page, email: str) -> dict:
     if not code:
         log.error("无法获取授权码")
         return None
+
+    # S2A 模式: 直接调用 s2a_create_account_from_oauth 入库
+    if AUTH_PROVIDER == "s2a":
+        log.step("S2A 入库...")
+        s2a_result = s2a_create_account_from_oauth(code=code, session_id=session_id, name=email)
+        if s2a_result:
+            log.success("S2A Codex 授权成功 (OTP)")
+            return s2a_result
+        else:
+            log.error("S2A 入库失败")
+            return None
 
     # 交换 tokens
     log.step("交换 tokens...")

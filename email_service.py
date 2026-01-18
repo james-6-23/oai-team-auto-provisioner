@@ -479,6 +479,8 @@ def get_verification_code(email: str, max_retries: int = None, interval: int = N
         patterns = [
             r"代码为\s*(\d{6})",
             r"code is\s*(\d{6})",
+            r"verification code[:\s]*(\d{6})",
+            r"验证码[：:\s]*(\d{6})",
             r"(\d{6})",
         ]
         for pattern in patterns:
@@ -487,13 +489,21 @@ def get_verification_code(email: str, max_retries: int = None, interval: int = N
                 return match.group(1)
         return None
 
+    def extract_code(text: str) -> str:
+        """从任意文本提取验证码 (兼容)"""
+        return extract_code_from_subject(text)
+
     def check_for_code(emails):
         """检查邮件中是否有验证码"""
         latest_email = emails[0]
-        subject = latest_email.get("subject", "")
         email_time_holder[0] = latest_email.get("createTime", "")
 
-        code = extract_code_from_subject(subject)
+        subject = latest_email.get("subject", "") or ""
+        content = latest_email.get("content", "") or ""
+        html = latest_email.get("html", "") or latest_email.get("html_content", "") or ""
+        text = latest_email.get("text", "") or latest_email.get("body", "") or ""
+
+        code = extract_code("\n".join([str(subject), str(content), str(html), str(text)]))
         return code
 
     # 使用通用轮询函数

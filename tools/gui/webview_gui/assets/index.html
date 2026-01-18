@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OAI Team Auto Provisioner</title>
+    <script>
+      (() => {
+        try {
+          const v = localStorage.getItem("oai-theme");
+          if (v === "light" || v === "dark") {
+            document.documentElement.setAttribute("data-theme", v);
+          }
+        } catch (_) {
+          // ignore
+        }
+      })();
+    </script>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="title">
+        <div class="app-name">OAI Team Auto Provisioner</div>
+        <div class="app-sub">pywebview · 本地运行 · 不上传数据</div>
+      </div>
+      <div class="status">
+        <span id="status-pill" class="pill pill-idle">空闲</span>
+        <button id="btn-theme" class="btn btn-ghost" type="button">
+          主题：跟随系统
+        </button>
+        <button id="btn-open-workdir" class="btn btn-ghost" type="button">
+          打开目录
+        </button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="panel controls">
+        <div class="card">
+          <div class="card-title">运行</div>
+
+          <div class="field">
+            <div class="field-label">模式</div>
+            <div class="mode-grid" role="radiogroup" aria-label="运行模式">
+              <label class="mode-card">
+                <input type="radio" name="mode" value="all" checked />
+                <div class="mode-content">
+                  <div class="mode-title">全量</div>
+                  <div class="mode-desc">所有 Team 依次执行</div>
+                </div>
+              </label>
+
+              <label class="mode-card">
+                <input type="radio" name="mode" value="single" />
+                <div class="mode-content">
+                  <div class="mode-title">单 Team</div>
+                  <div class="mode-desc">按索引选择一个 Team</div>
+                </div>
+              </label>
+
+              <label class="mode-card">
+                <input type="radio" name="mode" value="test" />
+                <div class="mode-content">
+                  <div class="mode-title">测试</div>
+                  <div class="mode-desc">仅邮箱创建 + 邀请</div>
+                </div>
+              </label>
+
+              <label class="mode-card">
+                <input type="radio" name="mode" value="status" />
+                <div class="mode-content">
+                  <div class="mode-title">状态</div>
+                  <div class="mode-desc">读取内部追踪记录</div>
+                </div>
+              </label>
+
+              <label class="mode-card">
+                <input type="radio" name="mode" value="register" />
+                <div class="mode-content">
+                  <div class="mode-title">批量注册</div>
+                  <div class="mode-desc">仅注册 OpenAI 账号</div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <div id="mode-single" class="mode-extra hidden">
+            <label class="field">
+              <div class="field-label">Team 索引（从 0 开始）</div>
+              <input id="team-index" class="input" type="number" value="0" />
+            </label>
+          </div>
+
+          <div id="mode-register" class="mode-extra hidden">
+            <label class="field">
+              <div class="field-label">注册数量</div>
+              <input id="reg-count" class="input" type="number" value="5" />
+            </label>
+            <div class="field">
+              <div class="field-label">邮箱来源</div>
+              <div class="mode-grid" role="radiogroup" aria-label="邮箱来源">
+                <label class="mode-card">
+                  <input type="radio" name="reg-source" value="domain" checked />
+                  <div class="mode-content">
+                    <div class="mode-title">域名邮箱</div>
+                    <div class="mode-desc">Cloud Mail（可控域名）</div>
+                  </div>
+                </label>
+                <label class="mode-card">
+                  <input type="radio" name="reg-source" value="gptmail" />
+                  <div class="mode-content">
+                    <div class="mode-title">随机邮箱</div>
+                    <div class="mode-desc">GPTMail（无需域名）</div>
+                  </div>
+                </label>
+              </div>
+            </div>
+            <div class="hint">
+              创建的邮箱与密码会写入程序内部存储（可在「数据/导出」页查看与导出）。
+            </div>
+          </div>
+
+          <div class="btn-row">
+            <button id="btn-start" class="btn btn-primary" type="button">
+              开始
+            </button>
+            <button id="btn-stop" class="btn btn-danger" type="button">
+              停止
+            </button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">数据/导出</div>
+          <div class="btn-col">
+            <button id="btn-open-data" class="btn btn-ghost" type="button">
+              打开「数据/导出」页
+            </button>
+          </div>
+          <div class="hint" id="paths-hint"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">配置</div>
+          <div class="btn-col">
+            <button id="btn-load" class="btn btn-ghost" type="button">
+              加载配置
+            </button>
+            <button id="btn-save" class="btn btn-primary" type="button">
+              保存配置
+            </button>
+            <button id="btn-from-example" class="btn btn-ghost" type="button">
+              从 example 生成（不覆盖）
+            </button>
+          </div>
+          <div class="hint">
+            修改后点击“保存配置”，再执行任务即可生效。
+          </div>
+        </div>
+      </section>
+
+      <section class="panel main">
+        <div class="tabs">
+          <button id="tab-logs" class="tab tab-active" type="button">
+            日志
+          </button>
+          <button id="tab-config" class="tab" type="button">
+            配置编辑
+          </button>
+          <button id="tab-status" class="tab" type="button">
+            状态
+          </button>
+          <button id="tab-data" class="tab" type="button">
+            数据/导出
+          </button>
+        </div>
+
+        <div id="view-logs" class="view view-active">
+          <div class="toolbar">
+            <div class="toolbar-left">
+              <label class="check">
+                <input id="auto-scroll" type="checkbox" checked />
+                <span>自动滚动</span>
+              </label>
+              <div class="search">
+                <input
+                  id="log-search"
+                  class="input input-sm"
+                  type="text"
+                  placeholder="搜索日志（Enter 查找）"
+                />
+                <button id="btn-search-prev" class="btn btn-ghost btn-sm" type="button">
+                  上一个
+                </button>
+                <button id="btn-search-next" class="btn btn-ghost btn-sm" type="button">
+                  下一个
+                </button>
+              </div>
+            </div>
+            <div class="toolbar-right">
+              <button id="btn-clear-log" class="btn btn-ghost" type="button">
+                清空
+              </button>
+              <button id="btn-copy-log" class="btn btn-ghost" type="button">
+                复制
+              </button>
+              <button id="btn-export-log" class="btn btn-ghost" type="button">
+                导出
+              </button>
+            </div>
+          </div>
+          <pre id="log" class="log"></pre>
+        </div>
+
+        <div id="view-config" class="view">
+          <div class="split">
+            <div class="editor">
+              <div class="editor-title">config.toml</div>
+              <textarea id="config-text" spellcheck="false"></textarea>
+            </div>
+            <div class="editor">
+              <div class="editor-title">team.json</div>
+              <textarea id="team-text" spellcheck="false"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div id="view-status" class="view">
+          <div class="toolbar">
+            <div class="toolbar-left">
+              <button id="btn-refresh-status" class="btn btn-ghost" type="button">
+                刷新
+              </button>
+            </div>
+            <div class="toolbar-right">
+              <button id="btn-copy-status" class="btn btn-ghost" type="button">
+                复制摘要
+              </button>
+            </div>
+          </div>
+          <div class="status-body">
+            <div id="status-summary" class="status-summary"></div>
+            <div id="status-teams" class="status-teams"></div>
+          </div>
+        </div>
+
+        <div id="view-data" class="view">
+          <div class="toolbar">
+            <div class="toolbar-left">
+              <button id="btn-refresh-data" class="btn btn-ghost" type="button">
+                刷新
+              </button>
+            </div>
+            <div class="toolbar-right">
+              <button id="btn-export-accounts" class="btn btn-ghost" type="button">
+                导出 accounts.csv
+              </button>
+              <button id="btn-export-credentials" class="btn btn-ghost" type="button">
+                导出 created_credentials.csv
+              </button>
+              <button id="btn-export-tracker" class="btn btn-ghost" type="button">
+                导出 team_tracker.json
+              </button>
+            </div>
+          </div>
+          <div class="data-body">
+            <div id="data-summary" class="status-summary"></div>
+            <div class="data-split">
+              <div class="data-panel">
+                <div class="editor-title">账号记录（最近 50）</div>
+                <pre id="data-accounts" class="data-pre"></pre>
+              </div>
+              <div class="data-panel">
+                <div class="editor-title">凭据记录（最近 50）</div>
+                <pre id="data-credentials" class="data-pre"></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

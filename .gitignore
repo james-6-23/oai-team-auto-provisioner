@@ -5,6 +5,7 @@ build/
 dist/
 wheels/
 *.egg-info
+*.spec
 
 # Virtual environments
 .venv
@@ -14,18 +15,29 @@ config.toml
 
 # Data files with sensitive information
 accounts.csv
+created_credentials.csv
 team.json
 team_tracker.json
 domain_blacklist.json
+exports/
+oai-team-gui-log-*.txt
 
-# Logs
+# Logs / runtime artifacts (often contain secrets)
 logs/
+*.log
+
+# Temporary outputs (often contain tokens)
+tools/register_results*.txt
 
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
+
+# Serena/工具缓存（本地生成，不应提交）
+.serena/
+.claude/
 
 # OS
 .DS_Store
